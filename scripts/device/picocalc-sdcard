@@ -1,0 +1,151 @@
+#!/bin/sh
+set -eu
+
+DEVICE="${PICOCALC_SD_DEVICE:-/dev/mmcblk1}"
+PARTITION="${PICOCALC_SD_PARTITION:-/dev/mmcblk1p1}"
+MOUNTPOINT="${PICOCALC_SD_MOUNTPOINT:-/mnt/sdcard}"
+
+usage() {
+	cat <<EOF
+Usage: picocalc-sdcard <status|mount|umount|eject|rescan>
+
+Defaults:
+  device:     $DEVICE
+  partition:  $PARTITION
+  mountpoint: $MOUNTPOINT
+
+Environment overrides:
+  PICOCALC_SD_DEVICE=/dev/mmcblk1
+  PICOCALC_SD_PARTITION=/dev/mmcblk1p1
+  PICOCALC_SD_MOUNTPOINT=/mnt/sdcard
+EOF
+}
+
+mounted_at() {
+	grep -qs " $MOUNTPOINT " /proc/mounts
+}
+
+mounted_device() {
+	grep -qs "^$PARTITION " /proc/mounts
+}
+
+require_partition() {
+	if [ ! -b "$PARTITION" ]; then
+		echo "SD partition not found: $PARTITION" >&2
+		echo "Insert a card, then run: picocalc-sdcard rescan" >&2
+		exit 1
+	fi
+}
+
+detect_fstype() {
+	blkid -o value -s TYPE "$PARTITION" 2>/dev/null || true
+}
+
+mount_card() {
+	require_partition
+	mkdir -p "$MOUNTPOINT"
+	if mounted_at || mounted_device; then
+		echo "$PARTITION is already mounted at $MOUNTPOINT"
+		return 0
+	fi
+
+	fstype="$(detect_fstype)"
+	case "$fstype" in
+		vfat)
+			mount -t vfat -o rw,nodev,noexec,noatime,nodiratime,fmask=0022,dmask=0022,shortname=mixed "$PARTITION" "$MOUNTPOINT"
+			;;
+		exfat)
+			mount -t exfat -o rw,nodev,noexec,noatime,nodiratime "$PARTITION" "$MOUNTPOINT"
+			;;
+		ntfs)
+			mount -t ntfs3 -o rw,nodev,noexec,noatime "$PARTITION" "$MOUNTPOINT"
+			;;
+		ext2|ext3|ext4)
+			mount -t "$fstype" -o rw,nodev,noexec,noatime "$PARTITION" "$MOUNTPOINT"
+			;;
+		"")
+			mount -o rw,nodev,noexec,noatime "$PARTITION" "$MOUNTPOINT"
+			;;
+		*)
+			mount -t "$fstype" -o rw,nodev,noexec,noatime "$PARTITION" "$MOUNTPOINT"
+			;;
+	esac
+	echo "Mounted $PARTITION at $MOUNTPOINT"
+}
+
+umount_card() {
+	if ! mounted_at && ! mounted_device; then
+		echo "$PARTITION is not mounted"
+		return 0
+	fi
+	sync
+	umount "$MOUNTPOINT"
+	echo "Unmounted $MOUNTPOINT"
+}
+
+eject_card() {
+	umount_card
+	sync
+	echo "Safe to remove the PicoCalc SD card from $DEVICE"
+}
+
+rescan_card() {
+	if [ -b "$DEVICE" ] && command -v partprobe >/dev/null 2>&1; then
+		partprobe "$DEVICE" 2>/dev/null || true
+	fi
+	if command -v udevadm >/dev/null 2>&1; then
+		udevadm trigger --subsystem-match=block 2>/dev/null || true
+		udevadm settle 2>/dev/null || true
+	fi
+	if [ -b "$PARTITION" ]; then
+		echo "Found $PARTITION"
+	else
+		echo "$PARTITION not found"
+	fi
+}
+
+status_card() {
+	echo "PicoCalc SD slot"
+	echo "  device:     $DEVICE"
+	echo "  partition:  $PARTITION"
+	echo "  mountpoint: $MOUNTPOINT"
+	echo
+	if [ -b "$DEVICE" ]; then
+		echo "Block device:"
+		ls -l "$DEVICE" "$PARTITION" 2>/dev/null || true
+		echo
+		echo "blkid:"
+		blkid "$DEVICE" "$PARTITION" 2>/dev/null || true
+	else
+		echo "Block device not present."
+	fi
+	echo
+	echo "Mount:"
+	grep -E "^$PARTITION | $MOUNTPOINT " /proc/mounts || echo "not mounted"
+}
+
+cmd="${1:-status}"
+case "$cmd" in
+	status)
+		status_card
+		;;
+	mount)
+		mount_card
+		;;
+	umount|unmount)
+		umount_card
+		;;
+	eject)
+		eject_card
+		;;
+	rescan)
+		rescan_card
+		;;
+	-h|--help|help)
+		usage
+		;;
+	*)
+		usage >&2
+		exit 2
+		;;
+esac

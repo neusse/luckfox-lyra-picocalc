@@ -1,0 +1,30 @@
+#!/bin/sh
+#
+# Enable swap from the real ext4 overlay partition.
+
+SWAPFILE="/overlay/swapfile"
+SIZE_MB="1024"
+
+case "$1" in
+	start)
+		if [ ! -f "$SWAPFILE" ]; then
+			fallocate -l "${SIZE_MB}M" "$SWAPFILE" || dd if=/dev/zero of="$SWAPFILE" bs=1M count="$SIZE_MB"
+			chmod 600 "$SWAPFILE"
+			mkswap "$SWAPFILE"
+		fi
+		swapon "$SWAPFILE" 2>/dev/null || true
+		;;
+	stop)
+		swapoff "$SWAPFILE" 2>/dev/null || true
+		;;
+	restart)
+		"$0" stop
+		"$0" start
+		;;
+	*)
+		echo "Usage: $0 {start|stop|restart}"
+		exit 1
+		;;
+esac
+
+exit 0

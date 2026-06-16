@@ -1,0 +1,49 @@
+#!/bin/sh
+#
+# Refresh the console login banner with current network addresses.
+
+ISSUE="/etc/issue"
+
+get_ipv4() {
+	ip -4 addr show "$1" 2>/dev/null | awk '/inet / {print $2}' | cut -d/ -f1 | head -1
+}
+
+wait_for_wlan() {
+	count=0
+	while [ "$count" -lt 25 ]; do
+		wlan_ip="$(get_ipv4 wlan0)"
+		[ -n "$wlan_ip" ] && return 0
+		count=$((count + 1))
+		sleep 1
+	done
+	return 0
+}
+
+write_issue() {
+	wlan_ip="$(get_ipv4 wlan0)"
+	usb_ip="$(get_ipv4 usb0)"
+
+	{
+		echo "PicoCalc Luckfox Lyra"
+		echo "login: root  password: picocalc"
+		echo
+		echo "Wi-Fi: ${wlan_ip:-not connected}"
+		echo "USB:   ${usb_ip:-not connected}"
+		echo
+	} > "$ISSUE"
+}
+
+case "$1" in
+	start|restart)
+		wait_for_wlan
+		write_issue
+		;;
+	stop)
+		;;
+	*)
+		echo "Usage: $0 {start|stop|restart}"
+		exit 1
+		;;
+esac
+
+exit 0

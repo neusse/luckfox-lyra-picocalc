@@ -1,0 +1,7 @@
+#!/bin/sh
+set -eu
+
+PYTHONPATH="/home/neusse/luckfox-dev/python${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONPATH
+
+exec python3 -c 'from picofb.screenshot import main; raise SystemExit(main())' "$@"

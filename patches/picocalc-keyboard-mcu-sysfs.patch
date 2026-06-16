@@ -1,0 +1,250 @@
+--- a/drivers/input/keyboard/picocalc-keyboard.c
++++ b/drivers/input/keyboard/picocalc-keyboard.c
+@@ -10,9 +10,17 @@
+ #include <linux/input.h>
+ #include <linux/workqueue.h>
+ #include <linux/of.h>
++#include <linux/kstrtox.h>
++#include <linux/mutex.h>
+ 
+ #define DRV_NAME    	"picocalc-keyboard"
+-#define PCKB_REG		0x09
++#define PICOCALC_WRITE_MASK	BIT(7)
++#define REG_ID_BKL		0x05
++#define REG_ID_FIF		0x09
++#define REG_ID_BK2		0x0a
++#define REG_ID_BAT		0x0b
++
++#define PCKB_REG		REG_ID_FIF
+ #define KEYCODE_SIZE	256
+ #define INTERVAL    	20 //ms
+ 
+@@ -26,6 +34,7 @@
+ 	struct input_dev *input;
+ 	struct delayed_work work;
+ 	int page_key;
++	struct mutex i2c_lock;
+ 	int interval;
+ };
+ 
+@@ -84,6 +93,39 @@
+ 	[' '] = KEY_SPACE, ['\n'] = KEY_ENTER,
+ };
+ 
++static int pckb_read_2u8(struct picocalc_keyboard *pckb, u8 reg, u8 *dst)
++{
++	int ret;
++
++	mutex_lock(&pckb->i2c_lock);
++	ret = i2c_smbus_read_word_data(pckb->client, reg);
++	mutex_unlock(&pckb->i2c_lock);
++	if (ret < 0)
++		return ret;
++
++	dst[0] = (u8)(ret & 0xff);
++	dst[1] = (u8)((ret >> 8) & 0xff);
++	return 0;
++}
++
++static int pckb_write_u8(struct picocalc_keyboard *pckb, u8 reg, u8 value)
++{
++	int ret;
++
++	mutex_lock(&pckb->i2c_lock);
++	ret = i2c_smbus_write_byte_data(pckb->client, reg | PICOCALC_WRITE_MASK, value);
++	mutex_unlock(&pckb->i2c_lock);
++
++	return ret;
++}
++
++static int pckb_battery_raw(struct picocalc_keyboard *pckb)
++{
++	u8 data[2];
++
++	return pckb_read_2u8(pckb, REG_ID_BAT, data) < 0 ? -EIO : data[1];
++}
++
+ static void pckb_work_handler(struct work_struct *work)
+ {
+     struct picocalc_keyboard *pckb = container_of(work,
+@@ -91,16 +133,17 @@
+     struct i2c_client *client = pckb->client;
+ 	u8 keystate;
+ 	u8 keycode;
++	u8 data[2];
+ 	int ret;
+ 
+-	ret = i2c_smbus_read_word_data(client, PCKB_REG);
++	ret = pckb_read_2u8(pckb, PCKB_REG, data);
+ 	if (ret < 0) {
+ 		dev_err(&client->dev, "%d\n", ret);
+-        goto reschedule;
++		goto reschedule;
+ 	}
+ 
+-	keystate = (u8)(ret & 0xff);
+-	keycode = (u8)((ret & 0xff00) >> 8);
++	keystate = data[0];
++	keycode = data[1];
+ 
+ 	if (keystate != KEY_STATE_PRESSED && keystate != KEY_STATE_RELEASED)
+ 		goto reschedule;
+@@ -131,6 +174,129 @@
+     schedule_delayed_work(&pckb->work, msecs_to_jiffies(pckb->interval));
+ }
+ 
++static ssize_t battery_raw_show(struct device *dev,
++				struct device_attribute *attr, char *buf)
++{
++	struct picocalc_keyboard *pckb = dev_get_drvdata(dev);
++	int raw = pckb_battery_raw(pckb);
++
++	if (raw < 0)
++		return raw;
++
++	return sysfs_emit(buf, "%d\n", raw);
++}
++static DEVICE_ATTR_RO(battery_raw);
++
++static ssize_t battery_percent_show(struct device *dev,
++				    struct device_attribute *attr, char *buf)
++{
++	struct picocalc_keyboard *pckb = dev_get_drvdata(dev);
++	int raw = pckb_battery_raw(pckb);
++
++	if (raw < 0)
++		return raw;
++
++	return sysfs_emit(buf, "%d\n", (int)(raw & ~BIT(7)));
++}
++static DEVICE_ATTR_RO(battery_percent);
++
++static ssize_t battery_status_show(struct device *dev,
++				   struct device_attribute *attr, char *buf)
++{
++	struct picocalc_keyboard *pckb = dev_get_drvdata(dev);
++	int raw = pckb_battery_raw(pckb);
++
++	if (raw < 0)
++		return raw;
++
++	if (raw & BIT(7))
++		return sysfs_emit(buf, "Charging\n");
++	if ((raw & ~BIT(7)) == 100)
++		return sysfs_emit(buf, "Full\n");
++	return sysfs_emit(buf, "Discharging\n");
++}
++static DEVICE_ATTR_RO(battery_status);
++
++static int pckb_parse_u8(const char *buf, u8 *value)
++{
++	unsigned int parsed;
++	int ret;
++
++	ret = kstrtouint(buf, 10, &parsed);
++	if (ret || parsed > 0xff)
++		return -EINVAL;
++
++	*value = parsed;
++	return 0;
++}
++
++static ssize_t pckb_backlight_show(struct device *dev, char *buf, u8 reg)
++{
++	struct picocalc_keyboard *pckb = dev_get_drvdata(dev);
++	u8 data[2];
++	int ret;
++
++	ret = pckb_read_2u8(pckb, reg, data);
++	if (ret < 0)
++		return ret;
++
++	return sysfs_emit(buf, "%u\n", data[1]);
++}
++
++static ssize_t pckb_backlight_store(struct device *dev,
++				    const char *buf, size_t count, u8 reg)
++{
++	struct picocalc_keyboard *pckb = dev_get_drvdata(dev);
++	u8 value;
++	int ret;
++
++	ret = pckb_parse_u8(buf, &value);
++	if (ret)
++		return ret;
++
++	ret = pckb_write_u8(pckb, reg, value);
++	if (ret)
++		return ret;
++
++	return count;
++}
++
++static ssize_t screen_backlight_show(struct device *dev,
++				     struct device_attribute *attr, char *buf)
++{
++	return pckb_backlight_show(dev, buf, REG_ID_BKL);
++}
++static ssize_t screen_backlight_store(struct device *dev,
++				      struct device_attribute *attr,
++				      const char *buf, size_t count)
++{
++	return pckb_backlight_store(dev, buf, count, REG_ID_BKL);
++}
++static DEVICE_ATTR_RW(screen_backlight);
++
++static ssize_t keyboard_backlight_show(struct device *dev,
++				       struct device_attribute *attr, char *buf)
++{
++	return pckb_backlight_show(dev, buf, REG_ID_BK2);
++}
++static ssize_t keyboard_backlight_store(struct device *dev,
++					struct device_attribute *attr,
++					const char *buf, size_t count)
++{
++	return pckb_backlight_store(dev, buf, count, REG_ID_BK2);
++}
++static DEVICE_ATTR_RW(keyboard_backlight);
++
++static struct attribute *pckb_attrs[] = {
++	&dev_attr_battery_raw.attr,
++	&dev_attr_battery_percent.attr,
++	&dev_attr_battery_status.attr,
++	&dev_attr_screen_backlight.attr,
++	&dev_attr_keyboard_backlight.attr,
++	NULL,
++};
++ATTRIBUTE_GROUPS(pckb);
++
+ static int pckb_probe(struct i2c_client *client, const struct i2c_device_id *id)
+ {
+ 	struct picocalc_keyboard *pckb;
+@@ -144,6 +310,7 @@
+     
+     pckb->client = client;
+     pckb->interval = INTERVAL;
++	mutex_init(&pckb->i2c_lock);
+ 	pckb->page_key = 0;
+ 
+ 	i2c_set_clientdata(client, pckb);
+@@ -175,6 +342,12 @@
+ 		goto error;
+ 	}
+ 
++	ret = sysfs_create_groups(&client->dev.kobj, pckb_groups);
++	if (ret) {
++		dev_err(dev, "Failed to create PicoCalc sysfs attributes: %d\n", ret);
++		goto error;
++	}
++
+     INIT_DELAYED_WORK(&pckb->work, pckb_work_handler);
+     schedule_delayed_work(&pckb->work, msecs_to_jiffies(pckb->interval));
+ 	return 0;
+@@ -188,6 +361,7 @@
+ 
+     pckb = i2c_get_clientdata(client);
+     cancel_delayed_work_sync(&pckb->work);
++	sysfs_remove_groups(&client->dev.kobj, pckb_groups);
+ }
+ 
+ static const struct i2c_device_id pckb_i2c_match[] = {

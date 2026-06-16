@@ -1,0 +1,28 @@
+#!/bin/sh
+#
+# Set the clock from NTP after Wi-Fi is associated.
+
+NTP_SCRIPT="/usr/local/sbin/picocalc_ntp.py"
+
+case "$1" in
+	start|restart)
+		[ -x "$NTP_SCRIPT" ] || exit 0
+
+		count=0
+		while ! ip -4 addr show wlan0 2>/dev/null | grep -q 'inet '; do
+			count=$((count + 1))
+			[ "$count" -ge 30 ] && exit 0
+			sleep 1
+		done
+
+		"$NTP_SCRIPT" || true
+		;;
+	stop)
+		;;
+	*)
+		echo "Usage: $0 {start|stop|restart}"
+		exit 1
+		;;
+esac
+
+exit 0

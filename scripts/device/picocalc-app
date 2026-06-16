@@ -1,0 +1,172 @@
+#!/usr/bin/env python3
+"""Launch PicoCalc apps with the project Python path configured."""
+
+from __future__ import annotations
+
+import os
+import posixpath
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+
+
+DEFAULT_ROOT = "/home/neusse/luckfox-dev"
+DEFAULT_VENV = "/home/neusse/venvs/nonroot"
+APP_ALIASES = {
+    "picocalc-weather": "weather",
+    "weather": "weather",
+}
+APP_SCRIPTS = {
+    "weather": "picocalc_weather.py",
+}
+DEVICE_PATHSEP = ":"
+
+
+@dataclass(frozen=True)
+class AppSpec:
+    app: str
+    script: str
+    args: list[str]
+
+
+def project_root() -> str:
+    return os.environ.get("PICOCALC_APP_ROOT", DEFAULT_ROOT)
+
+
+def venv_root() -> str:
+    return os.environ.get("PICOCALC_APP_VENV", DEFAULT_VENV)
+
+
+def usage() -> str:
+    apps = ", ".join(sorted(APP_SCRIPTS))
+    return (
+        "usage: picocalc-app <app> [args...]\n"
+        "       weather [args...]\n\n"
+        f"apps: {apps}\n"
+        "examples:\n"
+        "  picocalc-app weather --once\n"
+        "  weather\n"
+    )
+
+
+def normalize_app(name: str) -> str:
+    return APP_ALIASES.get(name, name)
+
+
+def resolve_invocation(program: str, argv: list[str]) -> AppSpec:
+    invoked = normalize_app(Path(program).name)
+    if invoked in APP_SCRIPTS:
+        app = invoked
+        app_args = list(argv)
+    else:
+        if not argv or argv[0] in ("-h", "--help", "help"):
+            raise SystemExit(usage())
+        app = normalize_app(argv[0])
+        app_args = list(argv[1:])
+
+    try:
+        script_name = APP_SCRIPTS[app]
+    except KeyError as exc:
+        raise SystemExit(f"unknown PicoCalc app: {app}\n\n{usage()}") from exc
+
+    return AppSpec(app=app, script=posixpath.join(project_root(), script_name), args=app_args)
+
+
+def _prepend(value: str, current: str | None) -> str:
+    if not current:
+        return value
+    parts = current.split(DEVICE_PATHSEP)
+    if value in parts:
+        return current
+    return value + DEVICE_PATHSEP + current
+
+
+def build_environment(base: dict[str, str] | None = None) -> dict[str, str]:
+    env = dict(os.environ if base is None else base)
+    env["PYTHONPATH"] = _prepend(posixpath.join(project_root(), "python"), env.get("PYTHONPATH"))
+
+    venv = venv_root()
+    venv_bin = posixpath.join(venv, "bin")
+    env["VIRTUAL_ENV"] = venv
+    env["PATH"] = _prepend(venv_bin, env.get("PATH"))
+    return env
+
+
+def runner_for(script: str, args: list[str], exists=os.path.exists) -> list[str]:
+    venv_python = posixpath.join(venv_root(), "bin", "python")
+    python = venv_python if exists(venv_python) else sys.executable
+    return [python, script, *args]
+
+
+def running_processes_for(
+    script: str,
+    *,
+    proc_root: str | Path = "/proc",
+    current_pid: int | None = None,
+) -> list[tuple[int, str]]:
+    current_pid = os.getpid() if current_pid is None else current_pid
+    root = Path(proc_root)
+    running: list[tuple[int, str]] = []
+
+    try:
+        entries = list(root.iterdir())
+    except OSError:
+        return running
+
+    for entry in entries:
+        if not entry.name.isdigit():
+            continue
+        pid = int(entry.name)
+        if pid == current_pid:
+            continue
+
+        try:
+            raw = (entry / "cmdline").read_bytes()
+        except OSError:
+            continue
+        if not raw:
+            continue
+
+        parts = [part.decode("utf-8", errors="replace") for part in raw.split(b"\0") if part]
+        if script in parts:
+            running.append((pid, " ".join(parts)))
+
+    return sorted(running)
+
+
+def running_app_message(spec: AppSpec, running: list[tuple[int, str]]) -> str:
+    pid = running[0][0]
+    return (
+        f"{spec.app} is already running on the PicoCalc console as PID {pid}.\n"
+        "Not starting a second copy.\n"
+        f"Stop it with: kill {pid}\n"
+        f"For a one-shot render after stopping it: picocalc-app {spec.app} --once"
+    )
+
+
+def main(argv: list[str] | None = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    try:
+        spec = resolve_invocation(sys.argv[0], argv)
+    except SystemExit as exc:
+        message = str(exc)
+        if message:
+            print(message, file=sys.stderr if "unknown" in message else sys.stdout)
+        return 2 if "unknown" in message else 0
+
+    if not os.path.exists(spec.script):
+        print(f"PicoCalc app script not found: {spec.script}", file=sys.stderr)
+        print("Run the Codex sync once, or set PICOCALC_APP_ROOT.", file=sys.stderr)
+        return 127
+
+    running = running_processes_for(spec.script)
+    if running:
+        print(running_app_message(spec, running))
+        return 1
+
+    os.execvpe(runner_for(spec.script, spec.args)[0], runner_for(spec.script, spec.args), build_environment())
+    return 127
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,59 @@
+diff --git a/base/buildroot/configs/rockchip_rk3506_picocalc_luckfox_defconfig b/base/buildroot/configs/rockchip_rk3506_picocalc_luckfox_defconfig
+index 1bff26f..24ca0a4 100644
+--- a/base/buildroot/configs/rockchip_rk3506_picocalc_luckfox_defconfig
++++ b/base/buildroot/configs/rockchip_rk3506_picocalc_luckfox_defconfig
+@@ -152,6 +152,7 @@ BR2_TARGET_ROOTFS_EXT2_SIZE="512M"
+ # BR2_TARGET_ROOTFS_TAR is not set
+ BR2_TARGET_SERIAL_SHELL_GETTY=y
+ BR2_TIME_BITS_64=y
++BR2_JLEVEL=2
+ BR2_TOOLCHAIN_BUILDROOT_CXX=y
+ BR2_arm=y
+ BR2_cortex_a7=y
+diff --git a/build.sh b/build.sh
+index 547a08d..2c28580 100755
+--- a/build.sh
++++ b/build.sh
+@@ -114,8 +114,15 @@ mkdir -p "$(pwd)/SDK"
+ mkdir -p "$(pwd)/download"
+ mkdir -p "$(pwd)/.ccache"
+ 
++# Allocate a TTY only for interactive terminals. Noninteractive runners
++# such as Codex cannot attach stdin to a TTY-enabled container.
++DOCKER_TTY_ARGS=()
++if [[ -t 0 && -t 1 ]]; then
++    DOCKER_TTY_ARGS=("-it")
++fi
++
+ # Run the container
+-docker run -it --rm --name "$CONTAINER_NAME" \
++docker run "${DOCKER_TTY_ARGS[@]}" --rm --name "$CONTAINER_NAME" \
+     --user="$(id -u):$(id -g)" \
+     "${DOCKER_VOLUMES[@]}" \
+     "${DOCKER_ENV[@]}" \
+diff --git a/docker/entrypoint.sh b/docker/entrypoint.sh
+index d35c31f..2b94a70 100755
+--- a/docker/entrypoint.sh
++++ b/docker/entrypoint.sh
+@@ -11,7 +11,8 @@ unpack_sdk() {
+     # URL found at https://wiki.luckfox.com/Luckfox-Lyra/Download
+     # Update notices: https://forums.luckfox.com/viewtopic.php?t=1420
+     # updated URL 2025-08-15
+-    SDK_URL=https://drive.google.com/file/d/15nq-Fac9q6zmisKZgLDZyoifSkL_48rG/view?usp=drive_link
++    SDK_FILE_ID=15nq-Fac9q6zmisKZgLDZyoifSkL_48rG
++    SDK_URL=https://drive.google.com/file/d/$SDK_FILE_ID/view?usp=drive_link
+     sdk_tarball_path="/opt/download/Luckfox_Lyra_SDK.tar.gz"
+ 
+     # Downloading the SDK
+@@ -20,9 +21,9 @@ unpack_sdk() {
+     else
+         echo "Downloading the SDK from: $SDK_URL..."
+         if [ -t 1 ]; then
+-            gdown --fuzzy $SDK_URL -O "$sdk_tarball_path"
++            gdown "$SDK_FILE_ID" -O "$sdk_tarball_path"
+         else
+-            gdown --fuzzy --quiet $SDK_URL -O "$sdk_tarball_path"
++            gdown --quiet "$SDK_FILE_ID" -O "$sdk_tarball_path"
+         fi
+     fi
+ 

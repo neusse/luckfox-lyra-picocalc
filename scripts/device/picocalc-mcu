@@ -1,0 +1,94 @@
+#!/bin/sh
+set -eu
+
+BASE="/sys/bus/i2c/devices/0-001f"
+
+usage() {
+	cat <<'USAGE'
+Usage: picocalc-mcu <status|battery|screen-backlight|keyboard-backlight> [value]
+
+Commands:
+  status                 Show battery and backlight values
+  battery                Show decoded battery percent and status
+  screen-backlight       Show screen backlight value
+  screen-backlight N     Set screen backlight value, 0..255
+  keyboard-backlight     Show keyboard backlight value
+  keyboard-backlight N   Set keyboard backlight value, 0..255
+USAGE
+}
+
+need_attr() {
+	if [ ! -e "$BASE/$1" ]; then
+		echo "Missing $BASE/$1. Boot a kernel with PicoCalc MCU sysfs support." >&2
+		exit 1
+	fi
+}
+
+read_attr() {
+	need_attr "$1"
+	cat "$BASE/$1"
+}
+
+write_attr() {
+	attr="$1"
+	value="$2"
+
+	need_attr "$attr"
+	case "$value" in
+		''|*[!0-9]*)
+			echo "Value must be an integer from 0 to 255" >&2
+			exit 2
+			;;
+	esac
+	if [ "$value" -gt 255 ]; then
+		echo "Value must be an integer from 0 to 255" >&2
+		exit 2
+	fi
+
+	echo "$value" > "$BASE/$attr"
+}
+
+cmd="${1:-status}"
+case "$cmd" in
+	status)
+		need_attr battery_percent
+		need_attr battery_status
+		need_attr screen_backlight
+		need_attr keyboard_backlight
+		printf "battery: %s%% (%s)\n" "$(read_attr battery_percent)" "$(read_attr battery_status)"
+		printf "screen_backlight: %s\n" "$(read_attr screen_backlight)"
+		printf "keyboard_backlight: %s\n" "$(read_attr keyboard_backlight)"
+		;;
+	battery)
+		need_attr battery_percent
+		need_attr battery_status
+		printf "%s%% (%s)\n" "$(read_attr battery_percent)" "$(read_attr battery_status)"
+		;;
+	screen-backlight)
+		if [ $# -eq 1 ]; then
+			read_attr screen_backlight
+		elif [ $# -eq 2 ]; then
+			write_attr screen_backlight "$2"
+		else
+			usage >&2
+			exit 2
+		fi
+		;;
+	keyboard-backlight)
+		if [ $# -eq 1 ]; then
+			read_attr keyboard_backlight
+		elif [ $# -eq 2 ]; then
+			write_attr keyboard_backlight "$2"
+		else
+			usage >&2
+			exit 2
+		fi
+		;;
+	-h|--help|help)
+		usage
+		;;
+	*)
+		usage >&2
+		exit 2
+		;;
+esac

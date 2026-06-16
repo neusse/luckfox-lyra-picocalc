@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="360" viewBox="0 0 1280 360" role="img" aria-labelledby="title desc">
+  <title id="title">Luckfox Lyra PicoCalc</title>
+  <desc id="desc">A polished banner for a Luckfox Lyra Linux project running inside a ClockworkPi PicoCalc.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#06151c"/>
+      <stop offset="0.48" stop-color="#092b34"/>
+      <stop offset="1" stop-color="#17321f"/>
+    </linearGradient>
+    <linearGradient id="screen" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#102735"/>
+      <stop offset="1" stop-color="#03090f"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#41f6cf"/>
+      <stop offset="0.5" stop-color="#ffe45a"/>
+      <stop offset="1" stop-color="#ff7a3d"/>
+    </linearGradient>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#000" flood-opacity="0.42"/>
+    </filter>
+  </defs>
+
+  <rect width="1280" height="360" fill="url(#bg)"/>
+  <path d="M0 288 C170 248 260 336 430 296 C610 254 720 230 884 276 C1045 322 1135 270 1280 236 L1280 360 L0 360 Z" fill="#071015" opacity="0.72"/>
+  <path d="M0 44 H1280" stroke="#41f6cf" stroke-opacity="0.18"/>
+  <path d="M0 316 H1280" stroke="#ffe45a" stroke-opacity="0.16"/>
+
+  <g filter="url(#softShadow)">
+    <rect x="74" y="54" width="290" height="250" rx="22" fill="#16232b" stroke="#3a5661" stroke-width="2"/>
+    <rect x="103" y="82" width="232" height="178" rx="8" fill="url(#screen)" stroke="#55d7f1" stroke-width="3"/>
+    <rect x="119" y="98" width="200" height="28" rx="2" fill="#0b3542"/>
+    <text x="130" y="117" fill="#f7fbff" font-family="Consolas, Menlo, monospace" font-size="18" font-weight="700">69F</text>
+    <text x="184" y="117" fill="#67f07d" font-family="Consolas, Menlo, monospace" font-size="11">BAT 100%</text>
+    <circle cx="154" cy="172" r="28" fill="#ffed37"/>
+    <text x="205" y="158" fill="#f7fbff" font-family="Consolas, Menlo, monospace" font-size="22">11:05</text>
+    <text x="205" y="178" fill="#d4e1e8" font-family="Consolas, Menlo, monospace" font-size="13">Tue Jun 16</text>
+    <text x="130" y="224" fill="#75f080" font-family="Consolas, Menlo, monospace" font-size="16">Clear Sky</text>
+    <rect x="122" y="272" width="42" height="12" rx="6" fill="#48f6d2"/>
+    <rect x="178" y="272" width="42" height="12" rx="6" fill="#ffe45a"/>
+    <rect x="234" y="272" width="42" height="12" rx="6" fill="#ff7a3d"/>
+    <rect x="290" y="272" width="28" height="12" rx="6" fill="#7ca0ff"/>
+  </g>
+
+  <g>
+    <text x="430" y="118" fill="#f8fbff" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="54" font-weight="800">Luckfox Lyra PicoCalc</text>
+    <text x="433" y="166" fill="#d8e8ef" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="25" font-weight="500">Linux bring-up, Python graphics, device utilities, and kernel fixes for a pocket RK3506 workstation.</text>
+    <rect x="433" y="202" width="620" height="5" rx="2.5" fill="url(#accent)"/>
+    <g font-family="Consolas, Menlo, monospace" font-size="18" font-weight="700">
+      <text x="433" y="252" fill="#41f6cf">/dev/fb0</text>
+      <text x="548" y="252" fill="#ffe45a">PicoFB</text>
+      <text x="646" y="252" fill="#ff9e5e">Keyboard MCU sysfs</text>
+      <text x="870" y="252" fill="#a6c4ff">88XXau Wi-Fi</text>
+    </g>
+  </g>
+</svg>

@@ -1,0 +1,2 @@
+# TP-Link AC600 Nano, USB ID 2357:011e.
+SUBSYSTEM=="net", ACTION=="add", DRIVERS=="?*", ATTR{address}=="cc:ba:bd:6b:58:f6", ATTR{dev_id}=="0x0", ATTR{type}=="1", KERNEL=="wlan*", NAME="wlan0"

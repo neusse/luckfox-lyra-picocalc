@@ -1,0 +1,3 @@
+*.sh text eol=lf
+scripts/device/* text eol=lf
+*.patch text eol=lf

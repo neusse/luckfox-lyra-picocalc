@@ -1,0 +1,42 @@
+#!/bin/sh
+#
+# Bring up Wi-Fi after the 88XXau module creates wlan0.
+
+IFACE="wlan0"
+CONF="/etc/wpa_supplicant.conf"
+PID="/var/run/wpa_supplicant-${IFACE}.pid"
+
+case "$1" in
+	start)
+		[ -f "$CONF" ] || exit 0
+
+		count=0
+		while ! ip link show "$IFACE" >/dev/null 2>&1; do
+			count=$((count + 1))
+			[ "$count" -ge 20 ] && exit 1
+			sleep 1
+		done
+
+		ip link set "$IFACE" up
+		if ! pgrep -f "wpa_supplicant.*-i ${IFACE}" >/dev/null 2>&1; then
+			wpa_supplicant -B -P "$PID" -i "$IFACE" -c "$CONF"
+		fi
+
+		# dhcpcd is already started by the base image and will assign
+		# the address/routes once association completes.
+		;;
+	stop)
+		[ -f "$PID" ] && kill "$(cat "$PID")" 2>/dev/null || true
+		killall wpa_supplicant 2>/dev/null || true
+		;;
+	restart)
+		"$0" stop
+		"$0" start
+		;;
+	*)
+		echo "Usage: $0 {start|stop|restart}"
+		exit 1
+		;;
+esac
+
+exit 0
