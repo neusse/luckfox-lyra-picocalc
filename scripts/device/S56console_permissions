@@ -10,6 +10,13 @@ fix_console_permissions() {
 		fi
 	done
 
+	for dev in /dev/input/event*; do
+		if [ -e "$dev" ]; then
+			chgrp tty "$dev" 2>/dev/null || true
+			chmod 0660 "$dev" 2>/dev/null || true
+		fi
+	done
+
 	if [ -w /sys/class/graphics/fbcon/cursor_blink ]; then
 		echo 0 > /sys/class/graphics/fbcon/cursor_blink 2>/dev/null || true
 	fi

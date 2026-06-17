@@ -93,6 +93,15 @@ class CanvasTests(unittest.TestCase):
         )
         self.assertGreater(lit_pixels, 0)
 
+    def test_text_draws_square_brackets(self):
+        canvas = Canvas(17, 7)
+        canvas.text("[M]", 0, 0, WHITE)
+
+        left_pixels = sum(1 for y in range(7) if canvas.pixel(0, y) == WHITE)
+        right_pixels = sum(1 for y in range(7) if canvas.pixel(16, y) == WHITE)
+        self.assertGreater(left_pixels, 2)
+        self.assertGreater(right_pixels, 2)
+
     def test_text_background_clears_inter_character_spacer(self):
         canvas = Canvas(11, 7, RED)
 

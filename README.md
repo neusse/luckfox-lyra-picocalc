@@ -101,6 +101,10 @@ sudoku --new medium
 sudoku --demo --once
 ```
 
+The interactive Sudoku app is meant to be started from the physical PicoCalc
+console. SSH launches fail intentionally because the app reads the PicoCalc
+keyboard through `/dev/input/event*`.
+
 ## Host Workflow
 
 From Windows, the host helper can sync `python/`, push an app script, and run it

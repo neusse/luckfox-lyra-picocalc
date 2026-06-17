@@ -37,7 +37,11 @@ PATH=/home/neusse/venvs/nonroot/bin:$PATH
 
 `sudoku` starts a playable graphical Sudoku game on the PicoCalc framebuffer:
 
-- `sudoku` resumes the saved game if one exists, otherwise starts a medium game.
+- `sudoku` opens the graphical start menu on the physical PicoCalc console.
+- The interactive app intentionally fails from SSH/ADB shells because keyboard
+  input comes from the PicoCalc `/dev/input/event*` device, not SSH stdin.
+- If a save exists, the menu offers `CONTINUE`; otherwise it offers `EASY`,
+  `MEDIUM`, `HARD`, and `EXIT`.
 - `sudoku --new easy`, `sudoku --new medium`, or `sudoku --new hard` starts a new game.
 - `sudoku --demo --once` draws the built-in demo board to `/dev/fb0` and exits.
 - Controls: arrows move, `1`-`9` set a value, `0`/Delete clears, `s` saves, `q` or Backspace saves and quits.

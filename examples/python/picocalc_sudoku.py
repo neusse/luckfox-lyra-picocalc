@@ -4,11 +4,13 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
-from picofb import BLACK, CYAN, RED, WHITE, YELLOW, Canvas, Display, color565
+from picofb import RED, WHITE, YELLOW, Display, color565
 from picogames.sudoku import (
     DEFAULT_SAVE_PATH,
     SudokuGame,
@@ -17,20 +19,23 @@ from picogames.sudoku import (
     load_game,
     save_game,
 )
+from picoterm.evdev import EventKeyboard, find_picocalc_event
 from picoterm.keys import Key, KeyPress
-from picoterm.screen import RawTerminal
 
 
-DARK = color565(1, 5, 10)
-HEADER = color565(9, 18, 28)
-GRID = color565(190, 205, 215)
-GRID_THICK = color565(248, 252, 255)
-BOX_HILITE = color565(11, 33, 54)
-ROW_HILITE = color565(8, 27, 43)
-SELECT = color565(255, 218, 54)
-USER = color565(70, 238, 210)
-MUTED = color565(150, 166, 178)
-PANEL = color565(17, 28, 38)
+DARK = color565(0, 0, 0)
+MENU_BG = DARK
+HEADER = color565(17, 17, 17)
+GRID = color565(232, 232, 232)
+GRID_THICK = WHITE
+BOX_HILITE = color565(10, 28, 60)
+ROW_HILITE = color565(24, 58, 122)
+SELECT = color565(255, 210, 0)
+USER = color565(0, 215, 167)
+MUTED = color565(176, 176, 176)
+PANEL = color565(32, 32, 32)
+MENU_TEXT = WHITE
+TITLE_BLUE = color565(50, 125, 255)
 
 WIDTH = 320
 HEIGHT = 320
@@ -39,6 +44,18 @@ GRID_X = 16
 GRID_Y = HEADER_H + 6
 CELL = 32
 GRID_SIZE = CELL * 9
+FONT_TITLE = "Decker"
+FONT_BODY = "Decker"
+MENU_FIRST_Y = 62
+MENU_ITEM_H = 34
+MENU_ITEM_GAP = 11
+
+
+@dataclass(frozen=True)
+class MenuItem:
+    label: str
+    action: str
+    value: str | None = None
 
 
 def format_elapsed(seconds: int) -> str:
@@ -54,18 +71,23 @@ def draw_text_right(target, value: object, right: int, y: int, color: int, *, sc
     target.text(value, right - text_width(value, scale), y, color, scale=scale)
 
 
+def draw_ttf_or_bitmap(target, value: object, x: int, y: int, color: int, *, size: int, scale: int = 1) -> None:
+    try:
+        target.text_ttf(value, x, y, color, font=FONT_BODY, size=size)
+    except Exception:
+        target.text(value, x, y, color, scale=scale)
+
+
 def draw_thick_rect(target, x: int, y: int, width: int, height: int, color: int, thickness: int = 2) -> None:
     for offset in range(thickness):
         target.rect(x + offset, y + offset, width - offset * 2, height - offset * 2, color)
 
 
 def draw_digit(target, value: int, row: int, col: int, color: int) -> None:
-    scale = 3
-    digit_w = 5 * scale
-    digit_h = 7 * scale
-    x = GRID_X + col * CELL + (CELL - digit_w) // 2
-    y = GRID_Y + row * CELL + (CELL - digit_h) // 2
-    target.text(str(value), x, y, color, scale=scale)
+    size = 25
+    x = GRID_X + col * CELL + 9
+    y = GRID_Y + row * CELL + 5
+    draw_ttf_or_bitmap(target, value, x, y, color, size=size, scale=3)
 
 
 def draw_grid(target) -> None:
@@ -94,8 +116,8 @@ def render_sudoku_frame(target, game: SudokuGame, message: str = ""):
     conflicts = compute_conflict_cells(game.grid)
     target.fill(DARK)
     target.fill_rect(0, 0, WIDTH, HEADER_H, HEADER)
-    target.text("SUDOKU", 6, 6, YELLOW, scale=2)
-    target.text(game.difficulty.upper(), 98, 9, MUTED, scale=1)
+    target.text("Sudoku", 5, 8, YELLOW, scale=1)
+    target.text(f"[{game.difficulty.upper()}]", 92, 8, MUTED, scale=1)
     draw_text_right(target, format_elapsed(game.elapsed_seconds()), WIDTH - 7, 9, WHITE, scale=1)
 
     draw_highlights(target, game)
@@ -123,6 +145,45 @@ def render_sudoku_frame(target, game: SudokuGame, message: str = ""):
         draw_thick_rect(target, 44, 134, 232, 52, SELECT, 2)
         x = 160 - text_width(message, 2) // 2
         target.text(message, max(50, x), 153, WHITE, scale=2)
+    return target
+
+
+def menu_options(save_exists: bool) -> list[MenuItem]:
+    items = []
+    if save_exists:
+        items.append(MenuItem("CONTINUE", "resume"))
+    items.extend(
+        [
+            MenuItem("EASY", "new", "easy"),
+            MenuItem("MEDIUM", "new", "medium"),
+            MenuItem("HARD", "new", "hard"),
+            MenuItem("EXIT", "exit"),
+        ]
+    )
+    return items
+
+
+def menu_item_y(index: int) -> int:
+    return MENU_FIRST_Y + index * (MENU_ITEM_H + MENU_ITEM_GAP)
+
+
+def render_menu_frame(target, items: list[MenuItem], selected: int = 0):
+    target.fill(MENU_BG)
+    target.fill_rect(0, 0, WIDTH, 34, HEADER)
+    draw_ttf_or_bitmap(target, "Sudoku", 6, 7, TITLE_BLUE, size=24, scale=2)
+
+    for index, item in enumerate(items):
+        y = menu_item_y(index)
+        selected_item = index == selected
+        fill = ROW_HILITE if selected_item else MENU_BG
+        border = SELECT if selected_item else MUTED
+        text_color = SELECT if selected_item else MENU_TEXT
+        target.fill_rect(28, y, WIDTH - 56, MENU_ITEM_H, fill)
+        draw_thick_rect(target, 28, y, WIDTH - 56, MENU_ITEM_H, border, 2 if selected_item else 1)
+        draw_ttf_or_bitmap(target, item.label, 48, y + 5, text_color, size=21, scale=2)
+
+    target.text("UP/DOWN SELECT  ENTER START", 10, HEIGHT - 22, MUTED, scale=1)
+    target.text("BACKSPACE EXIT", 10, HEIGHT - 10, MUTED, scale=1)
     return target
 
 
@@ -183,6 +244,27 @@ def key_to_action(key: KeyPress) -> tuple[str, int | str | None]:
     return key.name, key.value
 
 
+def open_keyboard(path: str | None = None):
+    return EventKeyboard(path or find_picocalc_event())
+
+
+def is_console_tty(path: str) -> bool:
+    return path.startswith("/dev/tty") and not path.startswith("/dev/tty0")
+
+
+def require_console_tty(ttyname=None) -> None:
+    if ttyname is None:
+        ttyname = os.ttyname
+    try:
+        path = ttyname(0)
+    except OSError as exc:
+        raise SystemExit("sudoku must be started from the PicoCalc console, not SSH or ADB") from exc
+    if not is_console_tty(path):
+        raise SystemExit(
+            f"sudoku must be started from the PicoCalc console; current terminal is {path}"
+        )
+
+
 def load_or_new(save_path: Path, difficulty: str, force_new: bool) -> SudokuGame:
     if not force_new and save_path.exists():
         return load_game(save_path)
@@ -196,14 +278,48 @@ def show_frame(display: Display, game: SudokuGame, message: str = "") -> None:
     display.show()
 
 
-def run_interactive(game: SudokuGame, save_path: Path) -> int:
-    if not sys.stdin.isatty():
-        with Display() as display:
-            show_frame(display, game)
-        return 0
+def choose_start_action(display: Display, keyboard, save_path: Path) -> MenuItem:
+    items = menu_options(save_path.exists())
+    selected = 0
+    if not save_path.exists():
+        selected = 1
+    selected = min(selected, len(items) - 1)
+    render_menu_frame(display, items, selected)
+    display.show()
 
+    while True:
+        key = keyboard.read_key(timeout=0.25)
+        if key is None:
+            continue
+        action, _value = key_to_action(key)
+        if action == Key.UP:
+            selected = (selected - 1) % len(items)
+        elif action == Key.DOWN:
+            selected = (selected + 1) % len(items)
+        elif action == Key.ENTER:
+            return items[selected]
+        elif action == "quit" or action == Key.ESCAPE:
+            return MenuItem("EXIT", "exit")
+        else:
+            continue
+        render_menu_frame(display, items, selected)
+        display.show()
+
+
+def game_from_menu_choice(choice: MenuItem, save_path: Path) -> SudokuGame | None:
+    if choice.action == "exit":
+        return None
+    if choice.action == "resume":
+        return load_game(save_path)
+    game = SudokuGame(choice.value or "medium")
+    game.generate_puzzle()
+    return game
+
+
+def run_interactive(game: SudokuGame, save_path: Path, keyboard_path: str | None = None) -> int:
+    require_console_tty()
     message = ""
-    with Display() as display, RawTerminal() as terminal:
+    with Display() as display, open_keyboard(keyboard_path) as keyboard:
         last_draw = 0.0
         while True:
             now = time.monotonic()
@@ -215,10 +331,10 @@ def run_interactive(game: SudokuGame, save_path: Path) -> int:
             if game.is_complete():
                 delete_save(save_path)
                 show_frame(display, game, "SOLVED")
-                terminal.read_key()
+                keyboard.read_key()
                 break
 
-            key = terminal.read_key(timeout=0.1)
+            key = keyboard.read_key(timeout=0.1)
             if key is None:
                 continue
             action, value = key_to_action(key)
@@ -244,6 +360,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--demo", action="store_true", help="use the built-in demo puzzle")
     parser.add_argument("--new", choices=("easy", "medium", "hard"), help="start a new puzzle")
     parser.add_argument("--save-path", type=Path, default=DEFAULT_SAVE_PATH)
+    parser.add_argument("--keyboard", help="evdev keyboard path, default: auto-detect PicoCalc keyboard")
+    parser.add_argument("--menu-once", action="store_true", help="render the graphical start menu and exit")
     return parser.parse_args(argv)
 
 
@@ -251,18 +369,69 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(list(sys.argv[1:] if argv is None else argv))
     if args.demo:
         game = demo_game()
+    elif args.menu_once:
+        with Display() as display:
+            render_menu_frame(display, menu_options(args.save_path.exists()), selected=0)
+            display.show()
+        return 0
+    elif args.new:
+        game = load_or_new(args.save_path, args.new, force_new=True)
     else:
-        game = load_or_new(
-            args.save_path,
-            args.new or "medium",
-            force_new=args.new is not None,
-        )
+        require_console_tty()
+        try:
+            with Display() as display, open_keyboard(args.keyboard) as keyboard:
+                choice = choose_start_action(display, keyboard, args.save_path)
+                game = game_from_menu_choice(choice, args.save_path)
+                if game is None:
+                    return 0
+                return run_game_loop(display, keyboard, game, args.save_path)
+        except PermissionError as exc:
+            raise SystemExit(
+                "permission denied reading PicoCalc keyboard; add user neusse to group input "
+                "or run S56console_permissions restart"
+            ) from exc
 
     if args.once:
         with Display() as display:
             show_frame(display, game)
         return 0
-    return run_interactive(game, args.save_path)
+    return run_interactive(game, args.save_path, args.keyboard)
+
+
+def run_game_loop(display: Display, keyboard, game: SudokuGame, save_path: Path) -> int:
+    message = ""
+    last_draw = 0.0
+    while True:
+        now = time.monotonic()
+        if message or now - last_draw >= 1:
+            show_frame(display, game, message)
+            message = ""
+            last_draw = now
+
+        if game.is_complete():
+            delete_save(save_path)
+            show_frame(display, game, "SOLVED")
+            keyboard.read_key()
+            break
+
+        key = keyboard.read_key(timeout=0.1)
+        if key is None:
+            continue
+        action, value = key_to_action(key)
+        if action == "q" or action == "quit" or action == Key.ESCAPE:
+            save_game(game, save_path)
+            show_frame(display, game, "SAVED")
+            break
+        if action == "s":
+            save_game(game, save_path)
+            message = "SAVED"
+            continue
+        if apply_key_action(game, action, value):
+            show_frame(display, game)
+            last_draw = time.monotonic()
+
+    print()
+    return 0
 
 
 if __name__ == "__main__":
