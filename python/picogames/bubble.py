@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 
-from picofb import BLACK, color565
+from picofb import BLACK, Canvas, color565
 
 
 # Total virtual curve positions in the effect.
@@ -54,6 +54,11 @@ ANG2INC = (CURVESTEP * SINTABLEENTRIES) // int(2 * PI)
 SCALESPEED = 1.04
 MOVESPEED = 2.0
 ANIMSPEEDCHANGE = 0.02
+
+# Cached sphere-field background. Keep these dark so the colored effect remains
+# dominant. RGB components are 0..255; useful range here is roughly 0..40.
+SPHERE_EDGE_RGB = (0, 0, 8)
+SPHERE_CENTER_RGB = (8, 4, 32)
 CURVE_STEPS = CURVECOUNT // CURVESTEP
 PALETTE_LEN = (CURVE_STEPS * ITERATIONS) + 1
 
@@ -84,6 +89,7 @@ class BubbleUniverse:
         self.scale_mul = int(height * PI / 2)
         self.sin_table, self.cos_table = self._create_tables()
         self.palette = self._create_palette()
+        self.background = self._create_background(width, height)
         self.reset()
 
     def reset(self) -> None:
@@ -124,7 +130,7 @@ class BubbleUniverse:
             self.y_offset -= int(MOVESPEED)
 
     def render(self, canvas) -> None:
-        canvas.fill(BLACK)
+        canvas.blit(self.background)
         ang1_start = int(self.animation_time)
         ang2_start = int(self.animation_time)
         xs: list[int] = []
@@ -180,3 +186,27 @@ class BubbleUniverse:
             for iteration in range(ITERATIONS):
                 palette[1 + (curve_idx * ITERATIONS) + iteration] = calculate_color(curve_index, iteration)
         return palette
+
+    @staticmethod
+    def _create_background(width: int, height: int) -> Canvas:
+        background = Canvas(width, height, BLACK)
+        center_x = width // 2
+        center_y = height // 2
+        radius = int(min(width, height) * 0.46)
+        radius_sq = radius * radius
+        edge_r, edge_g, edge_b = SPHERE_EDGE_RGB
+        center_r, center_g, center_b = SPHERE_CENTER_RGB
+
+        for y in range(height):
+            dy = y - center_y
+            for x in range(width):
+                dx = x - center_x
+                distance_sq = (dx * dx) + (dy * dy)
+                if distance_sq > radius_sq:
+                    continue
+                strength = radius_sq - distance_sq
+                red = edge_r + ((center_r - edge_r) * strength // radius_sq)
+                green = edge_g + ((center_g - edge_g) * strength // radius_sq)
+                blue = edge_b + ((center_b - edge_b) * strength // radius_sq)
+                background.pixel(x, y, color565(red, green, blue))
+        return background

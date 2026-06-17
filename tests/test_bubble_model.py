@@ -17,6 +17,36 @@ class BubbleModelTests(unittest.TestCase):
         self.assertEqual(len(bubble.sin_table), SINTABLEENTRIES)
         self.assertEqual(len(bubble.cos_table), SINTABLEENTRIES)
 
+    def test_cached_background_gives_sphere_subtle_body(self):
+        from picofb import BLACK, color565
+        from picogames.bubble import BubbleUniverse, SPHERE_CENTER_RGB
+
+        bubble = BubbleUniverse(64, 64)
+
+        self.assertEqual(bubble.background.pixel(32, 32), color565(*SPHERE_CENTER_RGB))
+        self.assertEqual(bubble.background.pixel(0, 0), BLACK)
+
+    def test_render_starts_from_cached_background(self):
+        from picofb import BLACK, Canvas
+        from picogames.bubble import BubbleUniverse
+
+        class BlitCanvas(Canvas):
+            def __init__(self, width, height, background=BLACK):
+                super().__init__(width, height, background)
+                self.blit_calls = 0
+
+            def blit(self, *args, **kwargs):
+                self.blit_calls += 1
+                return super().blit(*args, **kwargs)
+
+        bubble = BubbleUniverse(96, 96)
+        canvas = BlitCanvas(96, 96, BLACK)
+
+        bubble.render(canvas)
+
+        self.assertGreaterEqual(canvas.blit_calls, 1)
+        self.assertNotEqual(canvas.pixel(48, 48), BLACK)
+
     def test_render_writes_colored_pixels(self):
         from picofb import BLACK, Canvas
         from picogames.bubble import BubbleUniverse

@@ -150,6 +150,26 @@ class CanvasTests(unittest.TestCase):
         self.assertEqual(target.pixel(0, 0), RED)
         self.assertEqual(target.pixel(1, 0), BLUE)
 
+    def test_full_canvas_blit_uses_direct_buffer_copy(self):
+        class CountingCanvas(Canvas):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                self.pixel_writes = 0
+
+            def pixel(self, x, y, color=None):
+                if color is not None:
+                    self.pixel_writes += 1
+                return super().pixel(x, y, color)
+
+        source = Canvas(2, 2, RED)
+        target = CountingCanvas(2, 2, BLACK)
+        target.pixel_writes = 0
+
+        target.blit(source)
+
+        self.assertEqual(target.pixel_writes, 0)
+        self.assertEqual(target.buffer, source.buffer)
+
     def test_raw_buffer_blit_requires_width_and_height(self):
         canvas = Canvas(1, 1)
 

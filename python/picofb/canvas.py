@@ -229,6 +229,17 @@ class Canvas:
         if len(data) < required_length:
             raise ValueError("source buffer is too small for dimensions")
 
+        if (
+            x == 0
+            and y == 0
+            and source_width == self.width
+            and source_height == self.height
+            and stride == self.width * 2
+            and transparent is None
+        ):
+            self.buffer[:] = data[: len(self.buffer)]
+            return self
+
         for source_y in range(source_height):
             row_offset = source_y * stride
             for source_x in range(source_width):
