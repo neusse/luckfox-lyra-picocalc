@@ -109,6 +109,14 @@ class DisplayTests(unittest.TestCase):
         self.assertIs(display.pixel(1, 1, RED), display)
         self.assertEqual(display.pixel(1, 1), RED)
 
+    def test_scatter_rgb565_returns_display_and_delegates_to_canvas(self):
+        root, fb_path = self.make_display_files()
+        display = Display(str(fb_path), sysfs_root=str(root), fb_name="fb0")
+        self.addCleanup(display.close)
+
+        self.assertIs(display.scatter_rgb565([1], [1], [RED]), display)
+        self.assertEqual(display.pixel(1, 1), RED)
+
 
 if __name__ == "__main__":
     unittest.main()

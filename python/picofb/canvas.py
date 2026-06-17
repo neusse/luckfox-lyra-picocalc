@@ -44,6 +44,24 @@ class Canvas:
         self.buffer[offset + 1] = (color >> 8) & 0xFF
         return self
 
+    def scatter_rgb565(self, xs, ys, colors):
+        """Write many RGB565 pixels, clipping coordinates outside the canvas."""
+        try:
+            import numpy as np
+        except ImportError:
+            for x, y, color in zip(xs, ys, colors):
+                self.pixel(int(x), int(y), int(color))
+            return self
+
+        x_arr = np.asarray(xs, dtype=np.int32)
+        y_arr = np.asarray(ys, dtype=np.int32)
+        color_arr = np.asarray(colors, dtype=np.uint16)
+        mask = (x_arr >= 0) & (x_arr < self.width) & (y_arr >= 0) & (y_arr < self.height)
+        if mask.any():
+            target = np.frombuffer(self.buffer, dtype="<u2").reshape((self.height, self.width))
+            target[y_arr[mask], x_arr[mask]] = color_arr[mask]
+        return self
+
     def fill(self, color: int):
         low = color & 0xFF
         high = (color >> 8) & 0xFF

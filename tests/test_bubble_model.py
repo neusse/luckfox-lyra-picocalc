@@ -35,6 +35,27 @@ class BubbleModelTests(unittest.TestCase):
         )
         self.assertGreater(lit, 100)
 
+    def test_render_uses_bulk_pixel_scatter_when_available(self):
+        from picofb import BLACK, Canvas
+        from picogames.bubble import BubbleUniverse
+
+        class ScatterCanvas(Canvas):
+            def __init__(self, width, height, background=BLACK):
+                super().__init__(width, height, background)
+                self.scatter_calls = 0
+
+            def scatter_rgb565(self, xs, ys, colors):
+                self.scatter_calls += 1
+                return super().scatter_rgb565(xs, ys, colors)
+
+        bubble = BubbleUniverse(96, 96)
+        bubble.animation_time = 900.0
+        canvas = ScatterCanvas(96, 96, BLACK)
+
+        bubble.render(canvas)
+
+        self.assertEqual(canvas.scatter_calls, 1)
+
     def test_actions_adjust_view_and_speed(self):
         from picogames.bubble import BubbleUniverse
 

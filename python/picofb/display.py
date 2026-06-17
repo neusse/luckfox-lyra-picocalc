@@ -120,6 +120,10 @@ class Display:
         self.canvas.fill(color)
         return self
 
+    def scatter_rgb565(self, xs, ys, colors):
+        self.canvas.scatter_rgb565(xs, ys, colors)
+        return self
+
     def clear(self):
         self.canvas.clear()
         return self

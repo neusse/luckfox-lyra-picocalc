@@ -48,6 +48,26 @@ with Display("/dev/fb0") as display:
     display.show()
 ```
 
+## Bulk Pixel Drawing
+
+Use `scatter_rgb565(xs, ys, colors)` when an app needs to draw many individual
+pixels per frame. It clips out-of-bounds coordinates and writes RGB565 pixels in
+bulk. If NumPy is installed, PicoFB uses a NumPy-backed fast path; otherwise it
+falls back to ordinary `pixel()` writes.
+
+```python
+from picofb import Display, RED, GREEN, BLUE
+
+with Display("/dev/fb0") as display:
+    display.clear()
+    display.scatter_rgb565(
+        xs=[10, 20, 30],
+        ys=[10, 20, 30],
+        colors=[RED, GREEN, BLUE],
+    )
+    display.show()
+```
+
 ## TrueType Fonts
 
 PicoFB can draw scalable TrueType text with `text_ttf()`. It uses Pillow when Pillow is installed, and otherwise falls back to the system FreeType library through `ctypes`. The `font` argument can be a direct `.ttf` path or a fontconfig family/name.

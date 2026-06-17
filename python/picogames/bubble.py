@@ -127,6 +127,9 @@ class BubbleUniverse:
         canvas.fill(BLACK)
         ang1_start = int(self.animation_time)
         ang2_start = int(self.animation_time)
+        xs: list[int] = []
+        ys: list[int] = []
+        colors: list[int] = []
 
         for curve_idx in range(CURVE_STEPS):
             curve_index = curve_idx * CURVESTEP
@@ -150,10 +153,14 @@ class BubbleUniverse:
                 if -self.center_x < px < self.center_x and -self.center_y < py < self.center_y:
                     sx = self.center_x + px
                     sy = self.center_y + py
-                    canvas.pixel(sx, sy, self.palette[1 + (curve_idx * ITERATIONS) + iteration])
+                    xs.append(sx)
+                    ys.append(sy)
+                    colors.append(self.palette[1 + (curve_idx * ITERATIONS) + iteration])
 
             ang1_start += ANG1INC
             ang2_start += ANG2INC
+
+        canvas.scatter_rgb565(xs, ys, colors)
 
     @staticmethod
     def _create_tables() -> tuple[list[int], list[int]]:

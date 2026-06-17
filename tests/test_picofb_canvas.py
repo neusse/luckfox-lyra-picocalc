@@ -31,6 +31,23 @@ class CanvasTests(unittest.TestCase):
         self.assertEqual(canvas.buffer, bytearray(8))
         self.assertEqual(canvas.pixel(-1, 0), BLACK)
 
+    def test_scatter_rgb565_writes_and_clips_multiple_pixels(self):
+        canvas = Canvas(3, 2)
+
+        self.assertIs(
+            canvas.scatter_rgb565(
+                xs=[0, 2, -1, 3, 1],
+                ys=[0, 1, 0, 1, 1],
+                colors=[RED, BLUE, GREEN, GREEN, WHITE],
+            ),
+            canvas,
+        )
+
+        self.assertEqual(canvas.pixel(0, 0), RED)
+        self.assertEqual(canvas.pixel(2, 1), BLUE)
+        self.assertEqual(canvas.pixel(1, 1), WHITE)
+        self.assertEqual(canvas.pixel(0, 1), BLACK)
+
     def test_fill_and_clear(self):
         canvas = Canvas(2, 2)
         self.assertIs(canvas.fill(WHITE), canvas)
