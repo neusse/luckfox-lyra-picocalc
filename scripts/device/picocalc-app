@@ -14,9 +14,12 @@ DEFAULT_ROOT = "/home/neusse/luckfox-dev"
 DEFAULT_VENV = "/home/neusse/venvs/nonroot"
 APP_ALIASES = {
     "picocalc-weather": "weather",
+    "picocalc-sudoku": "sudoku",
+    "sudoku": "sudoku",
     "weather": "weather",
 }
 APP_SCRIPTS = {
+    "sudoku": "picocalc_sudoku.py",
     "weather": "picocalc_weather.py",
 }
 DEVICE_PATHSEP = ":"
@@ -41,10 +44,13 @@ def usage() -> str:
     apps = ", ".join(sorted(APP_SCRIPTS))
     return (
         "usage: picocalc-app <app> [args...]\n"
-        "       weather [args...]\n\n"
+        "       weather [args...]\n"
+        "       sudoku [args...]\n\n"
         f"apps: {apps}\n"
         "examples:\n"
         "  picocalc-app weather --once\n"
+        "  picocalc-app sudoku --demo --once\n"
+        "  sudoku --new medium\n"
         "  weather\n"
     )
 

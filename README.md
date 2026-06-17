@@ -21,6 +21,8 @@ pieces that made the device usable:
 - PicoFB, a tiny RGB565 framebuffer graphics library for `/dev/fb0`.
 - A PicoCalc OpenWeather dashboard with BMP icons, battery status, Pacific time,
   and live refresh.
+- A playable Linux console Sudoku app converted from the CircuitPython version,
+  plus reusable raw-terminal key decoding utilities.
 - A `picocalc-app` launcher so apps work from a login shell without manually
   setting `PYTHONPATH`.
 - Device helpers for screenshots, SD-card mount/eject, keyboard MCU status,
@@ -47,6 +49,8 @@ Python:      Python 3.11 with a non-root venv at /home/neusse/venvs/nonroot
 
 ```text
 python/picofb/                         PicoCalc framebuffer library
+python/picoterm/                       Raw terminal and ANSI helpers
+python/picogames/                      Shared game logic such as Sudoku
 python/circuitpython_apps/weather_icons/ BMP assets used by the weather app
 examples/python/                       Weather dashboard and framebuffer demos
 examples/c/                            Cross-compile smoke test
@@ -68,6 +72,8 @@ chmod 755 /usr/local/bin/picocalc-app
 ln -sf /usr/local/bin/picocalc-app /usr/bin/picocalc-app
 ln -sf /usr/local/bin/picocalc-app /usr/bin/weather
 ln -sf /usr/local/bin/picocalc-app /usr/bin/picocalc-weather
+ln -sf /usr/local/bin/picocalc-app /usr/bin/sudoku
+ln -sf /usr/local/bin/picocalc-app /usr/bin/picocalc-sudoku
 ```
 
 Run the weather app once:
@@ -85,6 +91,14 @@ weather
 The live dashboard updates the clock every 30 seconds and fetches weather every
 5 minutes. If a copy is already running, the launcher reports the running PID and
 exits instead of starting another copy.
+
+Run Sudoku on the text console:
+
+```sh
+sudoku
+sudoku --new medium
+sudoku --demo --once
+```
 
 ## Host Workflow
 

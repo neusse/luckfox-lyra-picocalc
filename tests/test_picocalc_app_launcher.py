@@ -34,6 +34,22 @@ class PicoCalcAppLauncherTests(unittest.TestCase):
         self.assertEqual(spec.script, "/home/neusse/luckfox-dev/picocalc_weather.py")
         self.assertEqual(spec.args, ["--once"])
 
+    def test_sudoku_command_dispatches_to_synced_sudoku_app(self):
+        module = self.load_module()
+
+        spec = module.resolve_invocation("picocalc-app", ["sudoku", "--demo", "--once"])
+
+        self.assertEqual(spec.script, "/home/neusse/luckfox-dev/picocalc_sudoku.py")
+        self.assertEqual(spec.args, ["--demo", "--once"])
+
+    def test_sudoku_basename_is_an_alias(self):
+        module = self.load_module()
+
+        spec = module.resolve_invocation("picocalc-sudoku", ["--demo", "--once"])
+
+        self.assertEqual(spec.script, "/home/neusse/luckfox-dev/picocalc_sudoku.py")
+        self.assertEqual(spec.args, ["--demo", "--once"])
+
     def test_environment_adds_project_python_and_nonroot_venv(self):
         module = self.load_module()
         env = {"PATH": "/usr/bin", "PYTHONPATH": "/tmp/extra"}
