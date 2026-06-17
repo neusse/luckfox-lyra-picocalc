@@ -33,6 +33,18 @@ class PicoCalcSudokuAppTests(unittest.TestCase):
             module.SELECT,
         )
 
+    def test_text_sprite_cache_reuses_rendered_glyphs(self):
+        module = self.load_module()
+
+        cache = module.TextSpriteCache()
+
+        first = cache.get("5", module.WHITE, size=25, fallback_scale=3)
+        second = cache.get("5", module.WHITE, size=25, fallback_scale=3)
+
+        self.assertIs(first, second)
+        self.assertGreater(first.width, 0)
+        self.assertGreater(first.height, 0)
+
     def test_menu_options_offer_resume_and_difficulties(self):
         module = self.load_module()
 

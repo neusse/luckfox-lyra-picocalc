@@ -10,7 +10,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from picofb import RED, WHITE, YELLOW, Display, color565
+from picofb import RED, WHITE, YELLOW, Canvas, Display, color565
 from picogames.sudoku import (
     DEFAULT_SAVE_PATH,
     SudokuGame,
@@ -21,6 +21,7 @@ from picogames.sudoku import (
 )
 from picoterm.evdev import EventKeyboard, find_picocalc_event
 from picoterm.keys import Key, KeyPress
+from picoterm.screen import RawTerminal
 
 
 DARK = color565(0, 0, 0)
@@ -58,6 +59,46 @@ class MenuItem:
     value: str | None = None
 
 
+@dataclass
+class TextSprite:
+    width: int
+    height: int
+    buffer: bytearray
+    transparent: list[bool]
+
+
+class TextSpriteCache:
+    def __init__(self):
+        self._sprites: dict[tuple[str, int, int, int], TextSprite] = {}
+
+    def get(self, value: object, color: int, *, size: int, fallback_scale: int = 1) -> TextSprite:
+        text = str(value)
+        key = (text, color, int(size), int(fallback_scale))
+        sprite = self._sprites.get(key)
+        if sprite is None:
+            sprite = self._render(text, color, int(size), int(fallback_scale))
+            self._sprites[key] = sprite
+        return sprite
+
+    def _render(self, text: str, color: int, size: int, fallback_scale: int) -> TextSprite:
+        width = max(6, int((len(text) * size * 0.72) + 10))
+        height = max(8, size + 8)
+        canvas = Canvas(width, height, DARK)
+        try:
+            canvas.text_ttf(text, 0, 0, color, font=FONT_BODY, size=size)
+        except Exception:
+            canvas.text(text, 0, 0, color, scale=fallback_scale)
+        transparent = [
+            canvas.pixel(x, y) == DARK
+            for y in range(height)
+            for x in range(width)
+        ]
+        return TextSprite(width=width, height=height, buffer=canvas.buffer, transparent=transparent)
+
+
+TEXT_CACHE = TextSpriteCache()
+
+
 def format_elapsed(seconds: int) -> str:
     minutes = seconds // 60
     return f"{minutes:02d}:{seconds % 60:02d}"
@@ -72,10 +113,7 @@ def draw_text_right(target, value: object, right: int, y: int, color: int, *, sc
 
 
 def draw_ttf_or_bitmap(target, value: object, x: int, y: int, color: int, *, size: int, scale: int = 1) -> None:
-    try:
-        target.text_ttf(value, x, y, color, font=FONT_BODY, size=size)
-    except Exception:
-        target.text(value, x, y, color, scale=scale)
+    target.blit(TEXT_CACHE.get(value, color, size=size, fallback_scale=scale), x, y)
 
 
 def draw_thick_rect(target, x: int, y: int, width: int, height: int, color: int, thickness: int = 2) -> None:
@@ -84,10 +122,10 @@ def draw_thick_rect(target, x: int, y: int, width: int, height: int, color: int,
 
 
 def draw_digit(target, value: int, row: int, col: int, color: int) -> None:
-    size = 25
-    x = GRID_X + col * CELL + 9
-    y = GRID_Y + row * CELL + 5
-    draw_ttf_or_bitmap(target, value, x, y, color, size=size, scale=3)
+    sprite = TEXT_CACHE.get(value, color, size=25, fallback_scale=3)
+    x = GRID_X + col * CELL + (CELL - sprite.width) // 2
+    y = GRID_Y + row * CELL + (CELL - sprite.height) // 2
+    target.blit(sprite, x, y)
 
 
 def draw_grid(target) -> None:
@@ -319,7 +357,7 @@ def game_from_menu_choice(choice: MenuItem, save_path: Path) -> SudokuGame | Non
 def run_interactive(game: SudokuGame, save_path: Path, keyboard_path: str | None = None) -> int:
     require_console_tty()
     message = ""
-    with Display() as display, open_keyboard(keyboard_path) as keyboard:
+    with RawTerminal(), Display() as display, open_keyboard(keyboard_path) as keyboard:
         last_draw = 0.0
         while True:
             now = time.monotonic()
@@ -349,8 +387,6 @@ def run_interactive(game: SudokuGame, save_path: Path, keyboard_path: str | None
             if apply_key_action(game, action, value):
                 show_frame(display, game)
                 last_draw = time.monotonic()
-
-    print()
     return 0
 
 
@@ -379,7 +415,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         require_console_tty()
         try:
-            with Display() as display, open_keyboard(args.keyboard) as keyboard:
+            with RawTerminal(), Display() as display, open_keyboard(args.keyboard) as keyboard:
                 choice = choose_start_action(display, keyboard, args.save_path)
                 game = game_from_menu_choice(choice, args.save_path)
                 if game is None:
@@ -430,7 +466,6 @@ def run_game_loop(display: Display, keyboard, game: SudokuGame, save_path: Path)
             show_frame(display, game)
             last_draw = time.monotonic()
 
-    print()
     return 0
 
 
