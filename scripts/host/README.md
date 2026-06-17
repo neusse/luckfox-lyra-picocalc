@@ -7,6 +7,8 @@
 - cross-compile simple C programs in WSL
 - push and run binaries on the PicoCalc
 
+For the full workflow, see [`docs/dev-loop.md`](../../docs/dev-loop.md).
+
 ## Status
 
 ```powershell
@@ -26,6 +28,18 @@ The script is uploaded to:
 ```
 
 It runs as user `neusse` and activates `~/venvs/nonroot` when available.
+
+Render app screenshots:
+
+```powershell
+python .\scripts\host\luckfox-dev.py runpy .\examples\python\picocalc_weather.py --once
+python .\scripts\host\luckfox-dev.py runpy .\examples\python\picocalc_sudoku.py --menu-once
+python .\scripts\host\luckfox-dev.py runpy .\examples\python\picocalc_sudoku.py --demo --once
+```
+
+Interactive framebuffer apps such as `sudoku` should be started from the
+physical PicoCalc console. Host-side `runpy` is for one-shot render/smoke-test
+commands.
 
 ## C
 

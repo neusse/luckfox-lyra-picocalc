@@ -33,6 +33,8 @@ pieces that made the device usable:
 
 ![PicoCalc weather dashboard](docs/images/weather-dashboard.png)
 
+![PicoCalc Sudoku board](docs/images/sudoku-board.png)
+
 ## Current Device Snapshot
 
 Known working target:
@@ -107,8 +109,8 @@ keyboard through `/dev/input/event*`.
 
 ## Host Workflow
 
-From Windows, the host helper can sync `python/`, push an app script, and run it
-over ADB:
+From Windows, the host helper provides a small Thonny-like edit-sync-run loop.
+It can sync `python/`, push an app script, and run it over ADB:
 
 ```powershell
 python .\scripts\host\luckfox-dev.py runpy .\examples\python\picocalc_weather.py --once
@@ -119,6 +121,8 @@ The helper assumes the active development target is:
 ```text
 /home/neusse/luckfox-dev
 ```
+
+See [Thonny-like development loop](docs/dev-loop.md) for the full workflow.
 
 ## Secrets
 
@@ -141,7 +145,9 @@ secrets = {
 - [Kernel source and patching](docs/kernel-source.md)
 - [Wi-Fi driver notes](docs/wifi-driver.md)
 - [PicoFB](docs/picofb.md)
+- [PicoCalc Sudoku](docs/picocalc-sudoku.md)
 - [PicoCalc app launcher](docs/picocalc-app-launcher.md)
+- [Thonny-like development loop](docs/dev-loop.md)
 - [Keyboard MCU sysfs patch](docs/picocalc-keyboard-mcu.md)
 - [SD-card helper](docs/picocalc-sdcard.md)
 

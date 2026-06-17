@@ -28,6 +28,15 @@ OpenWeather dashboard for the PicoCalc screen. It requires BMP icon assets and
 fails loudly if they are missing.
 
 ```text
+examples/python/picocalc_sudoku.py
+python/picogames/sudoku.py
+python/picoterm/evdev.py
+```
+
+Graphical framebuffer Sudoku app, shared Sudoku model, and PicoCalc keyboard
+input-event reader. See `docs/picocalc-sudoku.md`.
+
+```text
 examples/python/fb_demo.py
 examples/python/fb_ttf_demo.py
 examples/python/fb_ttf_showcase.py
@@ -66,7 +75,15 @@ scripts/device/S56console_permissions
 scripts/host/luckfox-dev.py
 ```
 
-Windows/ADB helper for syncing the Python tree and running apps on the PicoCalc.
+Windows/ADB helper for the Thonny-like edit-sync-run loop. See
+`docs/dev-loop.md`.
+
+```text
+docs/images/sudoku-menu.png
+docs/images/sudoku-board.png
+```
+
+Checked-in screenshots for the graphical Sudoku documentation.
 
 ## Kernel And Build Patches
 
@@ -85,4 +102,4 @@ tests/
 ```
 
 Host-side regression tests for PicoFB, the weather app, launcher behavior,
-screenshots, TTF rendering, and the keyboard patch.
+Sudoku, input-event decoding, screenshots, TTF rendering, and the keyboard patch.
