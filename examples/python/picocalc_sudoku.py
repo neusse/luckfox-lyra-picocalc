@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Sudoku for the Luckfox Lyra PicoCalc Linux console."""
+"""Graphical Sudoku for the Luckfox Lyra PicoCalc framebuffer."""
 
 from __future__ import annotations
 
 import argparse
-import os
-import re
 import sys
+import time
 from pathlib import Path
 
+from picofb import BLACK, CYAN, RED, WHITE, YELLOW, Canvas, Display, color565
 from picogames.sudoku import (
     DEFAULT_SAVE_PATH,
     SudokuGame,
@@ -18,16 +18,27 @@ from picogames.sudoku import (
     save_game,
 )
 from picoterm.keys import Key, KeyPress
-from picoterm.screen import RawTerminal, clear_screen, hide_cursor, show_cursor, strip_ansi
+from picoterm.screen import RawTerminal
 
 
-RESET = "\x1b[0m"
-BOLD = "\x1b[1m"
-DIM = "\x1b[2m"
-RED = "\x1b[31;1m"
-CYAN = "\x1b[36;1m"
-YELLOW = "\x1b[33;1m"
-REVERSE = "\x1b[7m"
+DARK = color565(1, 5, 10)
+HEADER = color565(9, 18, 28)
+GRID = color565(190, 205, 215)
+GRID_THICK = color565(248, 252, 255)
+BOX_HILITE = color565(11, 33, 54)
+ROW_HILITE = color565(8, 27, 43)
+SELECT = color565(255, 218, 54)
+USER = color565(70, 238, 210)
+MUTED = color565(150, 166, 178)
+PANEL = color565(17, 28, 38)
+
+WIDTH = 320
+HEIGHT = 320
+HEADER_H = 24
+GRID_X = 16
+GRID_Y = HEADER_H + 6
+CELL = 32
+GRID_SIZE = CELL * 9
 
 
 def format_elapsed(seconds: int) -> str:
@@ -35,60 +46,84 @@ def format_elapsed(seconds: int) -> str:
     return f"{minutes:02d}:{seconds % 60:02d}"
 
 
-def clamp_line(line: str, width: int) -> str:
-    visible = strip_ansi(line)
-    if len(visible) <= width:
-        return line
-    return visible[:width]
+def text_width(value: object, scale: int = 1) -> int:
+    return len(str(value)) * 6 * max(1, int(scale))
 
 
-def styled_cell(game: SudokuGame, row: int, col: int, conflicts: set[tuple[int, int]]) -> str:
-    value = game.grid[row][col]
-    text = "." if value == 0 else str(value)
-    if (row, col) == (game.cursor_row, game.cursor_col):
-        return f"{REVERSE}{text}{RESET}"
-    if (row, col) in conflicts:
-        return f"{RED}{text}{RESET}"
-    if game.given[row][col]:
-        return f"{BOLD}{text}{RESET}"
-    if value:
-        return f"{CYAN}{text}{RESET}"
-    return text
+def draw_text_right(target, value: object, right: int, y: int, color: int, *, scale: int = 1) -> None:
+    target.text(value, right - text_width(value, scale), y, color, scale=scale)
 
 
-def render_board(game: SudokuGame) -> list[str]:
+def draw_thick_rect(target, x: int, y: int, width: int, height: int, color: int, thickness: int = 2) -> None:
+    for offset in range(thickness):
+        target.rect(x + offset, y + offset, width - offset * 2, height - offset * 2, color)
+
+
+def draw_digit(target, value: int, row: int, col: int, color: int) -> None:
+    scale = 3
+    digit_w = 5 * scale
+    digit_h = 7 * scale
+    x = GRID_X + col * CELL + (CELL - digit_w) // 2
+    y = GRID_Y + row * CELL + (CELL - digit_h) // 2
+    target.text(str(value), x, y, color, scale=scale)
+
+
+def draw_grid(target) -> None:
+    for index in range(10):
+        pos = index * CELL
+        thick = index % 3 == 0
+        color = GRID_THICK if thick else GRID
+        line_width = 2 if thick else 1
+        for offset in range(line_width):
+            target.vline(GRID_X + pos + offset, GRID_Y, GRID_SIZE + 1, color)
+            target.hline(GRID_X, GRID_Y + pos + offset, GRID_SIZE + 1, color)
+
+
+def draw_highlights(target, game: SudokuGame) -> None:
+    row = game.cursor_row
+    col = game.cursor_col
+    box_row = (row // 3) * 3
+    box_col = (col // 3) * 3
+
+    target.fill_rect(GRID_X + box_col * CELL + 1, GRID_Y + box_row * CELL + 1, CELL * 3 - 1, CELL * 3 - 1, BOX_HILITE)
+    target.fill_rect(GRID_X + 1, GRID_Y + row * CELL + 1, GRID_SIZE - 1, CELL - 1, ROW_HILITE)
+    target.fill_rect(GRID_X + col * CELL + 1, GRID_Y + 1, CELL - 1, GRID_SIZE - 1, ROW_HILITE)
+
+
+def render_sudoku_frame(target, game: SudokuGame, message: str = ""):
     conflicts = compute_conflict_cells(game.grid)
-    border = "+-------+-------+-------+"
-    lines = [border]
+    target.fill(DARK)
+    target.fill_rect(0, 0, WIDTH, HEADER_H, HEADER)
+    target.text("SUDOKU", 6, 6, YELLOW, scale=2)
+    target.text(game.difficulty.upper(), 98, 9, MUTED, scale=1)
+    draw_text_right(target, format_elapsed(game.elapsed_seconds()), WIDTH - 7, 9, WHITE, scale=1)
+
+    draw_highlights(target, game)
+    draw_grid(target)
+
     for row in range(9):
-        parts = ["|"]
         for col in range(9):
-            parts.append(" " + styled_cell(game, row, col, conflicts))
-            if col in (2, 5, 8):
-                parts.append(" |")
-        lines.append("".join(parts))
-        if row in (2, 5, 8):
-            lines.append(border)
-    return lines
+            value = game.grid[row][col]
+            if not value:
+                continue
+            if (row, col) in conflicts:
+                color = RED
+            elif game.given[row][col]:
+                color = WHITE
+            else:
+                color = USER
+            draw_digit(target, value, row, col, color)
 
+    selected_x = GRID_X + game.cursor_col * CELL
+    selected_y = GRID_Y + game.cursor_row * CELL
+    draw_thick_rect(target, selected_x, selected_y, CELL + 1, CELL + 1, SELECT, 3)
 
-def render_game_screen(game: SudokuGame, width: int = 45, show_help: bool = True, message: str = "") -> str:
-    conflicts = compute_conflict_cells(game.grid)
-    header = f"{YELLOW}PicoCalc Sudoku{RESET} {game.difficulty} {format_elapsed(game.elapsed_seconds())}"
-    lines = [header, ""]
-    lines.extend(render_board(game))
-    lines.append("")
-    lines.append(f"Cell r{game.cursor_row + 1} c{game.cursor_col + 1}  conflicts {len(conflicts)}")
     if message:
-        lines.append(f"{YELLOW}{message}{RESET}")
-    if show_help:
-        lines.extend(
-            [
-                "Arrows move   1-9 set",
-                "0/Del clear   s save   q quit",
-            ]
-        )
-    return "\n".join(clamp_line(line, width) for line in lines)
+        target.fill_rect(44, 134, 232, 52, PANEL)
+        draw_thick_rect(target, 44, 134, 232, 52, SELECT, 2)
+        x = 160 - text_width(message, 2) // 2
+        target.text(message, max(50, x), 153, WHITE, scale=2)
+    return target
 
 
 def demo_game() -> SudokuGame:
@@ -148,12 +183,6 @@ def key_to_action(key: KeyPress) -> tuple[str, int | str | None]:
     return key.name, key.value
 
 
-def write_frame(screen: RawTerminal, game: SudokuGame, message: str = "") -> None:
-    screen.stdout.write(clear_screen())
-    screen.stdout.write(render_game_screen(game, width=45, message=message))
-    screen.stdout.flush()
-
-
 def load_or_new(save_path: Path, difficulty: str, force_new: bool) -> SudokuGame:
     if not force_new and save_path.exists():
         return load_game(save_path)
@@ -162,42 +191,56 @@ def load_or_new(save_path: Path, difficulty: str, force_new: bool) -> SudokuGame
     return game
 
 
+def show_frame(display: Display, game: SudokuGame, message: str = "") -> None:
+    render_sudoku_frame(display, game, message)
+    display.show()
+
+
 def run_interactive(game: SudokuGame, save_path: Path) -> int:
     if not sys.stdin.isatty():
-        print(render_game_screen(game, width=45))
+        with Display() as display:
+            show_frame(display, game)
         return 0
 
     message = ""
-    with RawTerminal() as screen:
+    with Display() as display, RawTerminal() as terminal:
+        last_draw = 0.0
         while True:
-            write_frame(screen, game, message)
-            message = ""
+            now = time.monotonic()
+            if message or now - last_draw >= 1:
+                show_frame(display, game, message)
+                message = ""
+                last_draw = now
 
             if game.is_complete():
                 delete_save(save_path)
-                write_frame(screen, game, "Solved. Press any key.")
-                screen.read_key()
+                show_frame(display, game, "SOLVED")
+                terminal.read_key()
                 break
 
-            action, value = key_to_action(screen.read_key())
+            key = terminal.read_key(timeout=0.1)
+            if key is None:
+                continue
+            action, value = key_to_action(key)
             if action == "q" or action == "quit" or action == Key.ESCAPE:
                 save_game(game, save_path)
-                message = "Saved."
-                write_frame(screen, game, message)
+                show_frame(display, game, "SAVED")
                 break
             if action == "s":
                 save_game(game, save_path)
-                message = "Saved."
+                message = "SAVED"
                 continue
-            apply_key_action(game, action, value)
+            if apply_key_action(game, action, value):
+                show_frame(display, game)
+                last_draw = time.monotonic()
 
     print()
     return 0
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Play Sudoku on the PicoCalc console")
-    parser.add_argument("--once", action="store_true", help="render one screen and exit")
+    parser = argparse.ArgumentParser(description="Play graphical Sudoku on the PicoCalc framebuffer")
+    parser.add_argument("--once", action="store_true", help="render one framebuffer screen and exit")
     parser.add_argument("--demo", action="store_true", help="use the built-in demo puzzle")
     parser.add_argument("--new", choices=("easy", "medium", "hard"), help="start a new puzzle")
     parser.add_argument("--save-path", type=Path, default=DEFAULT_SAVE_PATH)
@@ -216,7 +259,8 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     if args.once:
-        print(render_game_screen(game, width=45))
+        with Display() as display:
+            show_frame(display, game)
         return 0
     return run_interactive(game, args.save_path)
 

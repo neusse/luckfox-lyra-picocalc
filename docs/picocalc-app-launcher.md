@@ -35,11 +35,11 @@ PATH=/home/neusse/venvs/nonroot/bin:$PATH
 - Weather refresh: every 5 minutes.
 - Clock redraw: every 30 seconds.
 
-`sudoku` starts a playable console Sudoku game:
+`sudoku` starts a playable graphical Sudoku game on the PicoCalc framebuffer:
 
 - `sudoku` resumes the saved game if one exists, otherwise starts a medium game.
 - `sudoku --new easy`, `sudoku --new medium`, or `sudoku --new hard` starts a new game.
-- `sudoku --demo --once` prints the built-in demo board and exits.
+- `sudoku --demo --once` draws the built-in demo board to `/dev/fb0` and exits.
 - Controls: arrows move, `1`-`9` set a value, `0`/Delete clears, `s` saves, `q` or Backspace saves and quits.
 
 If an app is already running, the launcher exits instead of starting a second

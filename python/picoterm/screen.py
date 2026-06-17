@@ -71,7 +71,13 @@ class RawTerminal:
         self.stdout.write(show_cursor())
         self.stdout.flush()
 
-    def read_key(self) -> KeyPress:
+    def read_key(self, timeout: float | None = None) -> KeyPress | None:
+        if timeout is not None:
+            fd = self.stdin.fileno()
+            ready, _, _ = select.select([fd], [], [], timeout)
+            if not ready:
+                return None
+
         raw = self.stdin.read(1)
         if raw == b"\x1b":
             fd = self.stdin.fileno()

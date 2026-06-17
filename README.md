@@ -21,8 +21,9 @@ pieces that made the device usable:
 - PicoFB, a tiny RGB565 framebuffer graphics library for `/dev/fb0`.
 - A PicoCalc OpenWeather dashboard with BMP icons, battery status, Pacific time,
   and live refresh.
-- A playable Linux console Sudoku app converted from the CircuitPython version,
-  plus reusable raw-terminal key decoding utilities.
+- A playable graphical Sudoku app converted from the CircuitPython version,
+  drawing through the Linux framebuffer with reusable raw-terminal key decoding
+  utilities.
 - A `picocalc-app` launcher so apps work from a login shell without manually
   setting `PYTHONPATH`.
 - Device helpers for screenshots, SD-card mount/eject, keyboard MCU status,
@@ -92,7 +93,7 @@ The live dashboard updates the clock every 30 seconds and fetches weather every
 5 minutes. If a copy is already running, the launcher reports the running PID and
 exits instead of starting another copy.
 
-Run Sudoku on the text console:
+Run graphical Sudoku on the PicoCalc framebuffer:
 
 ```sh
 sudoku

@@ -17,17 +17,22 @@ class PicoCalcSudokuAppTests(unittest.TestCase):
         spec.loader.exec_module(module)
         return module
 
-    def test_rendered_board_fits_picocalc_console(self):
+    def test_rendered_board_draws_to_framebuffer_canvas(self):
         module = self.load_module()
+        from picofb import Canvas
+
         game = module.demo_game()
+        canvas = Canvas(320, 320)
 
-        screen = module.render_game_screen(game, width=45, show_help=True)
+        module.render_sudoku_frame(canvas, game)
 
-        lines = screen.splitlines()
-        self.assertGreaterEqual(len(lines), 18)
-        self.assertTrue(all(len(module.strip_ansi(line)) <= 45 for line in lines))
-        self.assertIn("PicoCalc Sudoku", screen)
-        self.assertIn("1-9 set", screen)
+        self.assertEqual(canvas.pixel(0, 0), module.HEADER)
+        self.assertEqual(canvas.pixel(module.GRID_X, module.GRID_Y), module.GRID_THICK)
+        self.assertEqual(
+            canvas.pixel(module.GRID_X + game.cursor_col * module.CELL, module.GRID_Y),
+            module.SELECT,
+        )
+        self.assertNotEqual(canvas.pixel(8, 6), module.HEADER)
 
     def test_applies_key_actions_to_game(self):
         module = self.load_module()
