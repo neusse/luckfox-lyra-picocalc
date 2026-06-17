@@ -8,9 +8,12 @@ Installed device commands:
 
 ```sh
 picocalc-app weather --once
+picocalc-app bubble --once
 picocalc-app sudoku --demo --once
+picocalc-bubble --once
 picocalc-weather --once
 picocalc-sudoku --new medium
+bubble
 sudoku
 weather --once
 weather
@@ -34,6 +37,15 @@ PATH=/home/neusse/venvs/nonroot/bin:$PATH
 
 - Weather refresh: every 5 minutes.
 - Clock redraw: every 30 seconds.
+
+`bubble` starts the Bubble Universe framebuffer animation:
+
+- `bubble` runs interactively from the physical PicoCalc console.
+- `bubble --once` draws one deterministic demo frame to `/dev/fb0` and exits.
+- Interactive Bubble intentionally fails from SSH/ADB shells because input comes
+  from the PicoCalc `/dev/input/event*` device.
+- Controls: arrows pan, Enter zooms in, Delete zooms out, `-`/`=` change speed,
+  Space pauses, Escape resets, `q` or Backspace quits.
 
 `sudoku` starts a playable graphical Sudoku game on the PicoCalc framebuffer:
 
@@ -63,6 +75,7 @@ Add new app scripts to `/home/neusse/luckfox-dev`, then register a short name in
 
 ```python
 APP_SCRIPTS = {
+    "bubble": "picocalc_bubble.py",
     "sudoku": "picocalc_sudoku.py",
     "weather": "picocalc_weather.py",
 }
@@ -72,6 +85,7 @@ If the app should also run from a direct command, add an alias:
 
 ```python
 APP_ALIASES = {
+    "bubble": "bubble",
     "sudoku": "sudoku",
     "weather": "weather",
 }
@@ -82,5 +96,5 @@ Install the launcher to the device:
 ```powershell
 $adb = Join-Path $env:LOCALAPPDATA 'Android\Sdk\platform-tools\adb.exe'
 & $adb push .\scripts\device\picocalc-app /usr/local/bin/picocalc-app
-& $adb shell 'chmod 755 /usr/local/bin/picocalc-app; ln -sf /usr/local/bin/picocalc-app /usr/bin/picocalc-app; ln -sf /usr/local/bin/picocalc-app /usr/bin/weather; ln -sf /usr/local/bin/picocalc-app /usr/bin/picocalc-weather; ln -sf /usr/local/bin/picocalc-app /usr/bin/sudoku; ln -sf /usr/local/bin/picocalc-app /usr/bin/picocalc-sudoku'
+& $adb shell 'chmod 755 /usr/local/bin/picocalc-app; ln -sf /usr/local/bin/picocalc-app /usr/bin/picocalc-app; ln -sf /usr/local/bin/picocalc-app /usr/bin/weather; ln -sf /usr/local/bin/picocalc-app /usr/bin/picocalc-weather; ln -sf /usr/local/bin/picocalc-app /usr/bin/sudoku; ln -sf /usr/local/bin/picocalc-app /usr/bin/picocalc-sudoku; ln -sf /usr/local/bin/picocalc-app /usr/bin/bubble; ln -sf /usr/local/bin/picocalc-app /usr/bin/picocalc-bubble'
 ```

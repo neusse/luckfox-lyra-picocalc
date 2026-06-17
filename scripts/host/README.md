@@ -33,6 +33,7 @@ Render app screenshots:
 
 ```powershell
 python .\scripts\host\luckfox-dev.py runpy .\examples\python\picocalc_weather.py --once
+python .\scripts\host\luckfox-dev.py runpy .\examples\python\picocalc_bubble.py --once
 python .\scripts\host\luckfox-dev.py runpy .\examples\python\picocalc_sudoku.py --menu-once
 python .\scripts\host\luckfox-dev.py runpy .\examples\python\picocalc_sudoku.py --demo --once
 ```

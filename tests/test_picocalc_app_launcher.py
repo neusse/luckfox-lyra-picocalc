@@ -42,6 +42,14 @@ class PicoCalcAppLauncherTests(unittest.TestCase):
         self.assertEqual(spec.script, "/home/neusse/luckfox-dev/picocalc_sudoku.py")
         self.assertEqual(spec.args, ["--demo", "--once"])
 
+    def test_bubble_command_dispatches_to_synced_bubble_app(self):
+        module = self.load_module()
+
+        spec = module.resolve_invocation("picocalc-app", ["bubble", "--once"])
+
+        self.assertEqual(spec.script, "/home/neusse/luckfox-dev/picocalc_bubble.py")
+        self.assertEqual(spec.args, ["--once"])
+
     def test_sudoku_basename_is_an_alias(self):
         module = self.load_module()
 

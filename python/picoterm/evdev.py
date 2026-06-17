@@ -22,10 +22,13 @@ KEY_7 = 8
 KEY_8 = 9
 KEY_9 = 10
 KEY_0 = 11
+KEY_MINUS = 12
+KEY_EQUAL = 13
 KEY_BACKSPACE = 14
 KEY_Q = 16
 KEY_Y = 21
 KEY_ENTER = 28
+KEY_SPACE = 57
 KEY_S = 31
 KEY_H = 35
 KEY_J = 36
@@ -64,8 +67,11 @@ _DIGITS = {
     KEY_9: 9,
 }
 _CHARS = {
+    KEY_MINUS: "-",
+    KEY_EQUAL: "=",
     KEY_Q: "q",
     KEY_S: "s",
+    KEY_SPACE: " ",
     KEY_Y: "y",
     KEY_N: "n",
     KEY_H: "h",

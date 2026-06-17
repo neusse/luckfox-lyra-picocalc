@@ -28,6 +28,14 @@ OpenWeather dashboard for the PicoCalc screen. It requires BMP icon assets and
 fails loudly if they are missing.
 
 ```text
+examples/python/picocalc_bubble.py
+python/picogames/bubble.py
+```
+
+Bubble Universe framebuffer animation and reusable model/renderer. See
+`docs/picocalc-bubble.md`.
+
+```text
 examples/python/picocalc_sudoku.py
 python/picogames/sudoku.py
 python/picoterm/evdev.py
@@ -81,9 +89,10 @@ Windows/ADB helper for the Thonny-like edit-sync-run loop. See
 ```text
 docs/images/sudoku-menu.png
 docs/images/sudoku-board.png
+docs/images/bubble-universe.png
 ```
 
-Checked-in screenshots for the graphical Sudoku documentation.
+Checked-in screenshots for the graphical app documentation.
 
 ## Kernel And Build Patches
 

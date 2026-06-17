@@ -21,6 +21,7 @@ pieces that made the device usable:
 - PicoFB, a tiny RGB565 framebuffer graphics library for `/dev/fb0`.
 - A PicoCalc OpenWeather dashboard with BMP icons, battery status, Pacific time,
   and live refresh.
+- A framebuffer Bubble Universe animation converted from the CircuitPython app.
 - A playable graphical Sudoku app converted from the CircuitPython version,
   drawing through the Linux framebuffer with reusable raw-terminal key decoding
   utilities.
@@ -32,6 +33,8 @@ pieces that made the device usable:
 - Notes for the Realtek USB Wi-Fi bring-up and the Luckfox kernel source path.
 
 ![PicoCalc weather dashboard](docs/images/weather-dashboard.png)
+
+![PicoCalc Bubble Universe](docs/images/bubble-universe.png)
 
 ![PicoCalc Sudoku board](docs/images/sudoku-board.png)
 
@@ -107,6 +110,13 @@ The interactive Sudoku app is meant to be started from the physical PicoCalc
 console. SSH launches fail intentionally because the app reads the PicoCalc
 keyboard through `/dev/input/event*`.
 
+Run Bubble Universe on the PicoCalc framebuffer:
+
+```sh
+bubble
+bubble --once
+```
+
 ## Host Workflow
 
 From Windows, the host helper provides a small Thonny-like edit-sync-run loop.
@@ -145,6 +155,7 @@ secrets = {
 - [Kernel source and patching](docs/kernel-source.md)
 - [Wi-Fi driver notes](docs/wifi-driver.md)
 - [PicoFB](docs/picofb.md)
+- [PicoCalc Bubble Universe](docs/picocalc-bubble.md)
 - [PicoCalc Sudoku](docs/picocalc-sudoku.md)
 - [PicoCalc app launcher](docs/picocalc-app-launcher.md)
 - [Thonny-like development loop](docs/dev-loop.md)

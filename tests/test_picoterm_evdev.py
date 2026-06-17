@@ -36,6 +36,18 @@ class EvdevKeyTests(unittest.TestCase):
 
         self.assertEqual(parse_input_event(event).name, Key.RIGHT)
 
+    def test_decodes_bubble_control_keys(self):
+        from picoterm.evdev import EV_KEY, KEY_EQUAL, KEY_MINUS, KEY_SPACE, parse_input_event
+        from picoterm.keys import Key
+
+        minus = parse_input_event(struct.pack("<llHHi", 0, 0, EV_KEY, KEY_MINUS, 1))
+        equal = parse_input_event(struct.pack("<llHHi", 0, 0, EV_KEY, KEY_EQUAL, 1))
+        space = parse_input_event(struct.pack("<llHHi", 0, 0, EV_KEY, KEY_SPACE, 1))
+
+        self.assertEqual((minus.name, minus.value), (Key.CHAR, "-"))
+        self.assertEqual((equal.name, equal.value), (Key.CHAR, "="))
+        self.assertEqual((space.name, space.value), (Key.CHAR, " "))
+
 
 if __name__ == "__main__":
     unittest.main()

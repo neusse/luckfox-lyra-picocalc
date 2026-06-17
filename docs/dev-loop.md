@@ -77,6 +77,12 @@ Render the Sudoku board for screenshots:
 python .\scripts\host\luckfox-dev.py runpy .\examples\python\picocalc_sudoku.py --demo --once
 ```
 
+Render the Bubble Universe app for screenshots:
+
+```powershell
+python .\scripts\host\luckfox-dev.py runpy .\examples\python\picocalc_bubble.py --once
+```
+
 `runpy` always syncs the local `python/` tree first. That means changes to
 `picofb`, `picoterm`, or `picogames` are available to the uploaded script right
 away.
@@ -138,4 +144,3 @@ If ADB is not at the default path, set `ADB` before running the helper:
 $env:ADB = 'C:\path\to\adb.exe'
 python .\scripts\host\luckfox-dev.py status
 ```
-
