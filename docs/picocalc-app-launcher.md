@@ -41,17 +41,17 @@ PATH=/home/neusse/venvs/nonroot/bin:$PATH
 `bubble` starts the Bubble Universe framebuffer animation:
 
 - `bubble` runs interactively from the physical PicoCalc console.
+- From SSH or ADB, `bubble` detaches to `/dev/tty1`, returns a PID, and uses
+  the physical PicoCalc keyboard/screen.
 - `bubble --once` draws one deterministic demo frame to `/dev/fb0` and exits.
-- Interactive Bubble intentionally fails from SSH/ADB shells because input comes
-  from the PicoCalc `/dev/input/event*` device.
 - Controls: arrows pan, Enter zooms in, Delete zooms out, `-`/`=` change speed,
   Space pauses, Escape resets, `q` or Backspace quits.
 
 `sudoku` starts a playable graphical Sudoku game on the PicoCalc framebuffer:
 
 - `sudoku` opens the graphical start menu on the physical PicoCalc console.
-- The interactive app intentionally fails from SSH/ADB shells because keyboard
-  input comes from the PicoCalc `/dev/input/event*` device, not SSH stdin.
+- From SSH or ADB, `sudoku` detaches to `/dev/tty1`, returns a PID, and uses
+  the physical PicoCalc keyboard/screen.
 - If a save exists, the menu offers `CONTINUE`; otherwise it offers `EASY`,
   `MEDIUM`, `HARD`, and `EXIT`.
 - `sudoku --new easy`, `sudoku --new medium`, or `sudoku --new hard` starts a new game.
@@ -80,6 +80,10 @@ APP_SCRIPTS = {
     "weather": "picocalc_weather.py",
 }
 ```
+
+If the app needs the physical PicoCalc console for raw terminal mode, add it to
+`CONSOLE_APPS`. Interactive remote launches will be detached to `/dev/tty1`;
+one-shot modes such as `--once` still run inline for screenshot workflows.
 
 If the app should also run from a direct command, add an alias:
 

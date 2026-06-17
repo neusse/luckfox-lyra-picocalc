@@ -41,15 +41,15 @@ ln -sf /usr/local/bin/picocalc-app /usr/bin/bubble
 ln -sf /usr/local/bin/picocalc-app /usr/bin/picocalc-bubble
 ```
 
-Then run from the physical PicoCalc console:
+Then run from the physical PicoCalc console or an SSH/ADB shell:
 
 ```sh
 bubble
 ```
 
-Do not run interactive Bubble from SSH. The app intentionally requires the
-physical console because it reads the real PicoCalc keyboard device and owns the
-framebuffer while running.
+When launched from SSH or ADB through `bubble` or `picocalc-app bubble`, the
+launcher detaches the app to `/dev/tty1` and prints the new PID. Interaction
+still happens on the physical PicoCalc keyboard and screen.
 
 ## Controls
 
@@ -82,4 +82,3 @@ python .\scripts\host\luckfox-dev.py runpy .\examples\python\picocalc_bubble.py 
   framebuffer device.
 - While running from the physical console, the app puts the console in raw mode
   so Linux does not echo keypresses over the framebuffer.
-

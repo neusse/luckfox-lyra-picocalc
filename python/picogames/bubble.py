@@ -7,14 +7,50 @@ import math
 from picofb import BLACK, color565
 
 
+# Total virtual curve positions in the effect.
+# Allowed: integer >= 1. Practical PicoCalc range: 128-512.
+# Actual drawn curve count is CURVECOUNT // CURVESTEP, so raising this only has
+# a visible effect when it increases that quotient.
 CURVECOUNT = 256
+
+# Spacing between drawn curves. Lower values draw more curves and make the
+# image denser/brighter; higher values draw fewer curves and run faster.
+# Allowed: integer 1..CURVECOUNT. If greater than CURVECOUNT, nothing draws.
+# Practical PicoCalc range: 4-32. Impressive-but-still-fast range: 8-12.
 CURVESTEP = 16
+
+# Points plotted per curve. This is the main detail knob: higher values make
+# longer, richer tendrils but cost CPU every frame.
+# Allowed: integer >= 1.
+# Color-safe/no-clamp range with the current palette formula: 1-64.
+# Values above 64 still draw more geometry, but later green values saturate at
+# 255 unless the palette formula is changed.
+# Practical PicoCalc range: 64-160. Try 96 or 128 for a denser effect.
 ITERATIONS = 64
 PI = math.pi
+
+# Sine/cosine lookup table size as a power of two. 12 means 4096 entries.
+# Higher values improve angular precision but use more RAM and slightly more
+# cache; lower values are faster/coarser.
+# Allowed: integer >= 8. Practical PicoCalc range: 10-16.
+# Memory use is about 2 * (1 << SINTABLEPOWER) Python integers, so 16 works but
+# is much larger than 12.
 SINTABLEPOWER = 12
 SINTABLEENTRIES = 1 << SINTABLEPOWER
+
+# Phase advance between neighboring curves for the two coupled oscillators.
+# These ratios shape the spiral/lissajous structure. Small denominator changes
+# can make the image tighter, wider, more symmetric, or more chaotic.
+# Denominators must be non-zero. Good ANG1 denominator trials: 181, 197, 211,
+# 223, 235, 251, 269, 307. ANG2 currently uses int(2 * pi) == 6.
 ANG1INC = (CURVESTEP * SINTABLEENTRIES) // 235
 ANG2INC = (CURVESTEP * SINTABLEENTRIES) // int(2 * PI)
+
+# Interactive controls. SCALESPEED is the zoom multiplier per keypress,
+# MOVESPEED is pixels per pan keypress, and ANIMSPEEDCHANGE is the animation
+# speed delta per keypress.
+# SCALESPEED practical range: 1.01-1.20. MOVESPEED practical range: 1-12 pixels.
+# ANIMSPEEDCHANGE practical range: 0.005-0.10.
 SCALESPEED = 1.04
 MOVESPEED = 2.0
 ANIMSPEEDCHANGE = 0.02
@@ -29,7 +65,14 @@ def calculate_color(curve_index: int, iteration: int) -> int:
     red = (255 * red_level) // 7
     green = (255 * green_level) // 15
     blue = (510 - (red + green)) >> 1
-    return color565(red, green, max(0, min(255, blue)))
+    # RGB565 input channels must be 0..255. With the current formula, green is
+    # naturally 0..255 only for iteration 0..63. Larger ITERATIONS still add
+    # geometry, but green will clamp to 255 for later points.
+    return color565(
+        max(0, min(255, red)),
+        max(0, min(255, green)),
+        max(0, min(255, blue)),
+    )
 
 
 class BubbleUniverse:

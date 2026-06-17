@@ -50,6 +50,48 @@ class PicoCalcAppLauncherTests(unittest.TestCase):
         self.assertEqual(spec.script, "/home/neusse/luckfox-dev/picocalc_bubble.py")
         self.assertEqual(spec.args, ["--once"])
 
+    def test_interactive_bubble_from_remote_shell_detaches_to_physical_console(self):
+        module = self.load_module()
+        spec = module.resolve_invocation("picocalc-app", ["bubble"])
+
+        should_detach = module.should_detach_to_console(spec, ttyname=lambda fd: "/dev/pts/0")
+
+        self.assertTrue(should_detach)
+
+    def test_interactive_sudoku_from_remote_shell_detaches_to_physical_console(self):
+        module = self.load_module()
+        spec = module.resolve_invocation("picocalc-app", ["sudoku", "--new", "medium"])
+
+        should_detach = module.should_detach_to_console(spec, ttyname=lambda fd: "/dev/pts/0")
+
+        self.assertTrue(should_detach)
+
+    def test_one_shot_bubble_from_remote_shell_runs_inline(self):
+        module = self.load_module()
+        spec = module.resolve_invocation("picocalc-app", ["bubble", "--once"])
+
+        should_detach = module.should_detach_to_console(spec, ttyname=lambda fd: "/dev/pts/0")
+
+        self.assertFalse(should_detach)
+
+    def test_interactive_bubble_from_physical_console_runs_inline(self):
+        module = self.load_module()
+        spec = module.resolve_invocation("picocalc-app", ["bubble"])
+
+        should_detach = module.should_detach_to_console(spec, ttyname=lambda fd: "/dev/tty1")
+
+        self.assertFalse(should_detach)
+
+    def test_console_launch_message_tells_user_where_app_started(self):
+        module = self.load_module()
+        spec = module.AppSpec("bubble", "/home/neusse/luckfox-dev/picocalc_bubble.py", [])
+
+        message = module.console_launch_message(spec, pid=1425)
+
+        self.assertIn("bubble started on /dev/tty1", message)
+        self.assertIn("PID 1425", message)
+        self.assertIn("/tmp/picocalc-app-bubble.log", message)
+
     def test_sudoku_basename_is_an_alias(self):
         module = self.load_module()
 

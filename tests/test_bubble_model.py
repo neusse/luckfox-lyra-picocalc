@@ -52,6 +52,13 @@ class BubbleModelTests(unittest.TestCase):
         self.assertEqual(bubble.size, 1.0)
         self.assertEqual(bubble.x_offset, 0)
 
+    def test_color_generation_tolerates_high_iteration_counts(self):
+        from picogames.bubble import calculate_color
+
+        color = calculate_color(curve_index=0, iteration=127)
+
+        self.assertIsInstance(color, int)
+
 
 if __name__ == "__main__":
     unittest.main()

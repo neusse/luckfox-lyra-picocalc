@@ -46,15 +46,15 @@ ln -sf /usr/local/bin/picocalc-app /usr/bin/sudoku
 ln -sf /usr/local/bin/picocalc-app /usr/bin/picocalc-sudoku
 ```
 
-Then run from the physical PicoCalc console:
+Then run from the physical PicoCalc console or an SSH/ADB shell:
 
 ```sh
 sudoku
 ```
 
-Do not run interactive Sudoku from SSH. The app intentionally fails from SSH or
-ADB shells because it needs the real PicoCalc keyboard device and owns the
-framebuffer while running.
+When launched from SSH or ADB through `sudoku` or `picocalc-app sudoku`, the
+launcher detaches the app to `/dev/tty1` and prints the new PID. Interaction
+still happens on the physical PicoCalc keyboard and screen.
 
 ## Menu Flow
 
@@ -125,4 +125,3 @@ one framebuffer frame and exit.
 - While running from the physical console, the app puts the console in raw mode
   so Linux does not echo keypress garbage over the framebuffer.
 - The keyboard event device is made readable by `scripts/device/S56console_permissions`.
-
