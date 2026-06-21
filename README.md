@@ -22,21 +22,36 @@ pieces that made the device usable:
 - A PicoCalc OpenWeather dashboard with BMP icons, battery status, Pacific time,
   and live refresh.
 - A framebuffer Bubble Universe animation converted from the CircuitPython app.
+- An iOS-style graphical calculator using PicoFB TrueType text.
 - A playable graphical Sudoku app converted from the CircuitPython version,
   drawing through the Linux framebuffer with reusable raw-terminal key decoding
   utilities.
+- PicoZork, a terminal Z-machine runner for Zork I, II, and III story files
+  on SSH or the 40-column PicoCalc console.
 - A `picocalc-app` launcher so apps work from a login shell without manually
   setting `PYTHONPATH`.
 - Device helpers for screenshots, SD-card mount/eject, keyboard MCU status,
   NTP, framebuffer permissions, swap, Wi-Fi startup, and login banner updates.
 - A kernel patch exposing PicoCalc keyboard MCU battery/backlight sysfs values.
 - Notes for the Realtek USB Wi-Fi bring-up and the Luckfox kernel source path.
+- A migration change map documenting runtime grafts and local image changes for
+  a future newer Buildroot rebuild.
 
 ![PicoCalc weather dashboard](docs/images/weather-dashboard.png)
 
 ![PicoCalc Bubble Universe](docs/images/bubble-universe.png)
 
+![PicoCalc Calculator](docs/images/picocalc-calculator.png)
+
 ![PicoCalc Sudoku board](docs/images/sudoku-board.png)
+
+![PicoCalc graphical launcher](docs/images/picocalc-launcher.png)
+
+![PicoCalc Fancy Clock](docs/images/picocalc-fancy-clock.png)
+
+![PicoCalc Minesweeper](docs/images/picocalc-minesweeper.png)
+
+![PicoZork on the PicoCalc console](docs/images/picozork-console-green.png)
 
 ## Current Device Snapshot
 
@@ -57,8 +72,10 @@ Python:      Python 3.11 with a non-root venv at /home/neusse/venvs/nonroot
 python/picofb/                         PicoCalc framebuffer library
 python/picoterm/                       Raw terminal and ANSI helpers
 python/picogames/                      Shared game logic such as Sudoku
+python/picozork/                       Terminal Z-machine runner for Zork
 python/circuitpython_apps/weather_icons/ BMP assets used by the weather app
 examples/python/                       Weather dashboard and framebuffer demos
+fonts/                                TrueType font files used by framebuffer apps
 examples/c/                            Cross-compile smoke test
 scripts/device/                        Utilities installed onto the PicoCalc
 scripts/host/                          Windows/WSL helper for sync/build/run
@@ -80,6 +97,9 @@ ln -sf /usr/local/bin/picocalc-app /usr/bin/weather
 ln -sf /usr/local/bin/picocalc-app /usr/bin/picocalc-weather
 ln -sf /usr/local/bin/picocalc-app /usr/bin/sudoku
 ln -sf /usr/local/bin/picocalc-app /usr/bin/picocalc-sudoku
+ln -sf /usr/local/bin/picocalc-app /usr/bin/zork
+ln -sf /usr/local/bin/picocalc-app /usr/bin/picozork
+ln -sf /usr/local/bin/picocalc-app /usr/bin/picocalc-zork
 ```
 
 Run the weather app once:
@@ -117,6 +137,24 @@ bubble
 bubble --once
 ```
 
+Run the graphical calculator:
+
+```sh
+calculator
+picocalc-calculator --once
+```
+
+Run PicoZork from SSH or from the physical console:
+
+```sh
+zork --list
+zork zork1
+```
+
+Stories are read from `/mnt/sdcard/cpz/stories` by default. On the physical
+console, PicoZork switches to the installed 40-column console font before
+starting.
+
 ## Host Workflow
 
 From Windows, the host helper provides a small Thonny-like edit-sync-run loop.
@@ -153,10 +191,16 @@ secrets = {
 - [Project journey](docs/journey/bring-up-journal.md)
 - [Source index](docs/source-index.md)
 - [Kernel source and patching](docs/kernel-source.md)
+- [Buildroot migration change map](docs/buildroot-migration-change-map.md)
 - [Wi-Fi driver notes](docs/wifi-driver.md)
 - [PicoFB](docs/picofb.md)
 - [PicoCalc Bubble Universe](docs/picocalc-bubble.md)
+- [PicoCalc Calculator](docs/picocalc-calculator.md)
+- [PicoCalc graphical launcher](docs/picocalc-graphical-launcher.md)
+- [PicoCalc Fancy Clock](docs/picocalc-fancy-clock.md)
+- [PicoCalc Minesweeper](docs/picocalc-minesweeper.md)
 - [PicoCalc Sudoku](docs/picocalc-sudoku.md)
+- [PicoZork](docs/picozork.md)
 - [PicoCalc app launcher](docs/picocalc-app-launcher.md)
 - [Thonny-like development loop](docs/dev-loop.md)
 - [Keyboard MCU sysfs patch](docs/picocalc-keyboard-mcu.md)

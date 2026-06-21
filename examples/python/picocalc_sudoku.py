@@ -19,6 +19,7 @@ from picogames.sudoku import (
     load_game,
     save_game,
 )
+from picoterm.appkeys import is_app_exit_key
 from picoterm.evdev import EventKeyboard, find_picocalc_event
 from picoterm.keys import Key, KeyPress
 from picoterm.screen import RawTerminal
@@ -45,6 +46,8 @@ GRID_X = 16
 GRID_Y = HEADER_H + 6
 CELL = 32
 GRID_SIZE = CELL * 9
+SELECT_THICKNESS = 3
+DIGIT_X_OFFSET = 2
 FONT_TITLE = "Decker"
 FONT_BODY = "Decker"
 MENU_FIRST_Y = 62
@@ -93,6 +96,24 @@ class TextSpriteCache:
             for y in range(height)
             for x in range(width)
         ]
+        lit = [index for index, is_transparent in enumerate(transparent) if not is_transparent]
+        if lit:
+            xs = [index % width for index in lit]
+            ys = [index // width for index in lit]
+            left = min(xs)
+            right = max(xs) + 1
+            top = min(ys)
+            bottom = max(ys) + 1
+            cropped = Canvas(right - left, bottom - top, DARK)
+            cropped.blit(canvas, -left, -top)
+            width = cropped.width
+            height = cropped.height
+            canvas = cropped
+            transparent = [
+                canvas.pixel(x, y) == DARK
+                for y in range(height)
+                for x in range(width)
+            ]
         return TextSprite(width=width, height=height, buffer=canvas.buffer, transparent=transparent)
 
 
@@ -123,9 +144,24 @@ def draw_thick_rect(target, x: int, y: int, width: int, height: int, color: int,
 
 def draw_digit(target, value: int, row: int, col: int, color: int) -> None:
     sprite = TEXT_CACHE.get(value, color, size=25, fallback_scale=3)
-    x = GRID_X + col * CELL + (CELL - sprite.width) // 2
+    x = GRID_X + col * CELL + (CELL - sprite.width) // 2 + DIGIT_X_OFFSET
     y = GRID_Y + row * CELL + (CELL - sprite.height) // 2
     target.blit(sprite, x, y)
+
+
+def draw_header(target, game: SudokuGame) -> None:
+    target.fill_rect(0, 0, WIDTH, HEADER_H, HEADER)
+    target.text("Sudoku", 5, 8, YELLOW, scale=1)
+    target.text(f"[{game.difficulty.upper()}]", 92, 8, MUTED, scale=1)
+    draw_text_right(target, format_elapsed(game.elapsed_seconds()), WIDTH - 7, 9, WHITE, scale=1)
+
+
+def cell_background(game: SudokuGame, row: int, col: int) -> int:
+    if row == game.cursor_row or col == game.cursor_col:
+        return ROW_HILITE
+    if row // 3 == game.cursor_row // 3 and col // 3 == game.cursor_col // 3:
+        return BOX_HILITE
+    return DARK
 
 
 def draw_grid(target) -> None:
@@ -137,6 +173,45 @@ def draw_grid(target) -> None:
         for offset in range(line_width):
             target.vline(GRID_X + pos + offset, GRID_Y, GRID_SIZE + 1, color)
             target.hline(GRID_X, GRID_Y + pos + offset, GRID_SIZE + 1, color)
+
+
+def draw_cell_grid(target, row: int, col: int) -> None:
+    x = GRID_X + col * CELL
+    y = GRID_Y + row * CELL
+    for index in (col, col + 1):
+        line_width = 2 if index % 3 == 0 else 1
+        color = GRID_THICK if index % 3 == 0 else GRID
+        px = GRID_X + index * CELL
+        for offset in range(line_width):
+            target.vline(px + offset, y, CELL + 1, color)
+    for index in (row, row + 1):
+        line_width = 2 if index % 3 == 0 else 1
+        color = GRID_THICK if index % 3 == 0 else GRID
+        py = GRID_Y + index * CELL
+        for offset in range(line_width):
+            target.hline(x, py + offset, CELL + 1, color)
+
+
+def draw_cell(target, game: SudokuGame, row: int, col: int, conflicts: set[tuple[int, int]] | None = None) -> None:
+    x = GRID_X + col * CELL
+    y = GRID_Y + row * CELL
+    target.fill_rect(x + 1, y + 1, CELL - 1, CELL - 1, cell_background(game, row, col))
+    draw_cell_grid(target, row, col)
+
+    value = game.grid[row][col]
+    if value:
+        if conflicts is None:
+            conflicts = compute_conflict_cells(game.grid)
+        if (row, col) in conflicts:
+            color = RED
+        elif game.given[row][col]:
+            color = WHITE
+        else:
+            color = USER
+        draw_digit(target, value, row, col, color)
+
+    if row == game.cursor_row and col == game.cursor_col:
+        draw_thick_rect(target, x, y, CELL + 1, CELL + 1, SELECT, SELECT_THICKNESS)
 
 
 def draw_highlights(target, game: SudokuGame) -> None:
@@ -153,10 +228,7 @@ def draw_highlights(target, game: SudokuGame) -> None:
 def render_sudoku_frame(target, game: SudokuGame, message: str = ""):
     conflicts = compute_conflict_cells(game.grid)
     target.fill(DARK)
-    target.fill_rect(0, 0, WIDTH, HEADER_H, HEADER)
-    target.text("Sudoku", 5, 8, YELLOW, scale=1)
-    target.text(f"[{game.difficulty.upper()}]", 92, 8, MUTED, scale=1)
-    draw_text_right(target, format_elapsed(game.elapsed_seconds()), WIDTH - 7, 9, WHITE, scale=1)
+    draw_header(target, game)
 
     draw_highlights(target, game)
     draw_grid(target)
@@ -176,7 +248,7 @@ def render_sudoku_frame(target, game: SudokuGame, message: str = ""):
 
     selected_x = GRID_X + game.cursor_col * CELL
     selected_y = GRID_Y + game.cursor_row * CELL
-    draw_thick_rect(target, selected_x, selected_y, CELL + 1, CELL + 1, SELECT, 3)
+    draw_thick_rect(target, selected_x, selected_y, CELL + 1, CELL + 1, SELECT, SELECT_THICKNESS)
 
     if message:
         target.fill_rect(44, 134, 232, 52, PANEL)
@@ -260,6 +332,8 @@ def apply_key_action(game: SudokuGame, action: str, value: int | str | None) -> 
 
 
 def key_to_action(key: KeyPress) -> tuple[str, int | str | None]:
+    if is_app_exit_key(key):
+        return "quit", None
     if key.name in (Key.UP, Key.DOWN, Key.LEFT, Key.RIGHT):
         return key.name, None
     if key.name == Key.DIGIT:
@@ -316,6 +390,89 @@ def show_frame(display: Display, game: SudokuGame, message: str = "") -> None:
     display.show()
 
 
+class SudokuRenderer:
+    def __init__(self, display: Display, game: SudokuGame):
+        self.display = display
+        self.game = game
+        self.last_cursor: tuple[int, int] | None = None
+
+    def show_full(self, message: str = "") -> None:
+        show_frame(self.display, self.game, message)
+        self.last_cursor = (self.game.cursor_row, self.game.cursor_col)
+
+    def show_header(self) -> None:
+        draw_header(self.display, self.game)
+        self.display.show_region(0, 0, WIDTH, HEADER_H)
+
+    def show_cursor_move(self, old_cursor: tuple[int, int] | None) -> None:
+        if old_cursor is None:
+            self.show_full()
+            return
+
+        cells = dirty_cells_for_cursor_move(old_cursor, (self.game.cursor_row, self.game.cursor_col))
+        conflicts = compute_conflict_cells(self.game.grid)
+        for row, col in cells:
+            draw_cell(self.display, self.game, row, col, conflicts)
+        self.display.show_regions(dirty_regions_for_cells(cells))
+        self.last_cursor = (self.game.cursor_row, self.game.cursor_col)
+
+
+def dirty_cells_for_cursor_move(
+    old_cursor: tuple[int, int],
+    new_cursor: tuple[int, int],
+) -> set[tuple[int, int]]:
+    old_row, old_col = old_cursor
+    new_row, new_col = new_cursor
+    cells: set[tuple[int, int]] = set()
+
+    for col in range(9):
+        cells.add((old_row, col))
+        cells.add((new_row, col))
+    for row in range(9):
+        cells.add((row, old_col))
+        cells.add((row, new_col))
+
+    for base_row, base_col in (
+        ((old_row // 3) * 3, (old_col // 3) * 3),
+        ((new_row // 3) * 3, (new_col // 3) * 3),
+    ):
+        for row in range(base_row, base_row + 3):
+            for col in range(base_col, base_col + 3):
+                cells.add((row, col))
+
+    return cells
+
+
+def dirty_regions_for_cells(cells: set[tuple[int, int]]) -> list[tuple[int, int, int, int]]:
+    regions: list[tuple[int, int, int, int]] = []
+    by_row: dict[int, list[int]] = {}
+    for row, col in cells:
+        by_row.setdefault(row, []).append(col)
+
+    for row in sorted(by_row):
+        cols = sorted(set(by_row[row]))
+        run_start = cols[0]
+        previous = cols[0]
+        for col in cols[1:]:
+            if col == previous + 1:
+                previous = col
+                continue
+            regions.append(cell_run_region(row, run_start, previous))
+            run_start = previous = col
+        regions.append(cell_run_region(row, run_start, previous))
+
+    return regions
+
+
+def cell_run_region(row: int, start_col: int, end_col: int) -> tuple[int, int, int, int]:
+    return (
+        GRID_X + start_col * CELL,
+        GRID_Y + row * CELL,
+        ((end_col - start_col + 1) * CELL) + SELECT_THICKNESS,
+        CELL + SELECT_THICKNESS,
+    )
+
+
 def choose_start_action(display: Display, keyboard, save_path: Path) -> MenuItem:
     items = menu_options(save_path.exists())
     selected = 0
@@ -358,17 +515,22 @@ def run_interactive(game: SudokuGame, save_path: Path, keyboard_path: str | None
     require_console_tty()
     message = ""
     with RawTerminal(), Display() as display, open_keyboard(keyboard_path) as keyboard:
-        last_draw = 0.0
+        renderer = SudokuRenderer(display, game)
+        renderer.show_full()
+        last_draw = time.monotonic()
         while True:
             now = time.monotonic()
             if message or now - last_draw >= 1:
-                show_frame(display, game, message)
+                if message:
+                    renderer.show_full(message)
+                else:
+                    renderer.show_header()
                 message = ""
                 last_draw = now
 
             if game.is_complete():
                 delete_save(save_path)
-                show_frame(display, game, "SOLVED")
+                renderer.show_full("SOLVED")
                 keyboard.read_key()
                 break
 
@@ -378,14 +540,18 @@ def run_interactive(game: SudokuGame, save_path: Path, keyboard_path: str | None
             action, value = key_to_action(key)
             if action == "q" or action == "quit" or action == Key.ESCAPE:
                 save_game(game, save_path)
-                show_frame(display, game, "SAVED")
+                renderer.show_full("SAVED")
                 break
             if action == "s":
                 save_game(game, save_path)
                 message = "SAVED"
                 continue
+            old_cursor = (game.cursor_row, game.cursor_col)
             if apply_key_action(game, action, value):
-                show_frame(display, game)
+                if action in (Key.UP, Key.DOWN, Key.LEFT, Key.RIGHT):
+                    renderer.show_cursor_move(old_cursor)
+                else:
+                    renderer.show_full()
                 last_draw = time.monotonic()
     return 0
 
@@ -436,17 +602,22 @@ def main(argv: list[str] | None = None) -> int:
 
 def run_game_loop(display: Display, keyboard, game: SudokuGame, save_path: Path) -> int:
     message = ""
-    last_draw = 0.0
+    renderer = SudokuRenderer(display, game)
+    renderer.show_full()
+    last_draw = time.monotonic()
     while True:
         now = time.monotonic()
         if message or now - last_draw >= 1:
-            show_frame(display, game, message)
+            if message:
+                renderer.show_full(message)
+            else:
+                renderer.show_header()
             message = ""
             last_draw = now
 
         if game.is_complete():
             delete_save(save_path)
-            show_frame(display, game, "SOLVED")
+            renderer.show_full("SOLVED")
             keyboard.read_key()
             break
 
@@ -456,14 +627,18 @@ def run_game_loop(display: Display, keyboard, game: SudokuGame, save_path: Path)
         action, value = key_to_action(key)
         if action == "q" or action == "quit" or action == Key.ESCAPE:
             save_game(game, save_path)
-            show_frame(display, game, "SAVED")
+            renderer.show_full("SAVED")
             break
         if action == "s":
             save_game(game, save_path)
             message = "SAVED"
             continue
+        old_cursor = (game.cursor_row, game.cursor_col)
         if apply_key_action(game, action, value):
-            show_frame(display, game)
+            if action in (Key.UP, Key.DOWN, Key.LEFT, Key.RIGHT):
+                renderer.show_cursor_move(old_cursor)
+            else:
+                renderer.show_full()
             last_draw = time.monotonic()
 
     return 0

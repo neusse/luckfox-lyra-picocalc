@@ -1,0 +1,115 @@
+{
+    "icons": [
+        {
+            "name": "weather",
+            "app": "/picocalc_weather.py",
+            "bmp": "/bmp/weather.bmp"
+        },
+        {
+            "name": "minesweeper",
+            "app": "/picocalc_minesweeper.py",
+            "bmp": "/bmp/minesweeper.bmp"
+        },
+        {
+            "name": "clock",
+            "app": "/picocalc_fancy_clock.py",
+            "bmp": "/bmp/clock.bmp"
+        },
+        {
+            "name": "sudoku",
+            "app": "/picocalc_sudoku.py",
+            "bmp": "/bmp/sudoku.bmp"
+        },
+        {
+            "name": "backup",
+            "app": "/picocalc_backup.py",
+            "bmp": "/bmp/backup.bmp"
+        },
+        {
+            "name": "breakout",
+            "app": "/picocalc_breakout.py",
+            "bmp": "/bmp/breakout.bmp"
+        },
+        {
+            "name": "bubble graphic",
+            "app": "/picocalc_bubble_clean.py",
+            "bmp": "/bmp/bubble_graphic.bmp"
+        },
+        {
+            "name": "email",
+            "app": "/picocalc_email.py",
+            "bmp": "/bmp/email.bmp"
+        },
+        {
+            "name": "game of life",
+            "app": "/picocalc_game_of_life.py",
+            "bmp": "/bmp/game_of_life.bmp"
+        },
+        {
+            "name": "calculator",
+            "app": "/picocalc_ios_calculator.py",
+            "bmp": "/bmp/calculator.bmp"
+        },
+        {
+            "name": "image display",
+            "app": "/picocalc_jpg_frm_inet.py",
+            "bmp": "/bmp/image_display.bmp"
+        },
+        {
+            "name": "macropad",
+            "app": "/picocalc_macropad.py",
+            "bmp": "/bmp/macropad.bmp"
+        },
+        {
+            "name": "pybasic",
+            "app": "/picocalc_pybasic.py",
+            "bmp": "/bmp/pybasic.bmp"
+        },
+        {
+            "name": "spirograph",
+            "app": "/picocalc_spiro.py",
+            "bmp": "/bmp/spirograph.bmp"
+        },
+        {
+            "name": "3d ripple",
+            "app": "/picocalc_ripple.py",
+            "bmp": "/bmp/3d_ripple.bmp"
+        },
+        {
+            "name": "zork",
+            "app": "/picocalc_zork.py",
+            "bmp": "/bmp/zork.bmp"
+        },
+        {
+            "name": "pong clock",
+            "app": "/picocalc_pong_clock.py",
+            "bmp": "/bmp/pong_clock.bmp"
+        },
+        {
+            "name": "switches demo",
+            "app": "/picocalc_switch_demo.py",
+            "bmp": "/bmp/switches_demo.bmp"
+        },
+        {
+            "name": "source viewer",
+            "app": "/picocalc_py_view.py",
+            "bmp": "/bmp/editor.bmp"
+        },
+        {
+            "name": "tetris",
+            "app": "/picocalc_tetris.py",
+            "bmp": "/bmp/tetris.bmp"
+        },
+        {
+            "name": "programer calc",
+            "app": "/picocalc_programmer_calc.py",
+            "bmp": "/bmp/prog_calculator.bmp"
+        },
+        {
+            "name": "four letter word",
+            "app": "/picocalc_FLW.py",
+            "bmp": "/bmp/four_letter_word.bmp"
+        }
+    ],
+    "errors": []
+}

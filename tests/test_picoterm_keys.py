@@ -37,6 +37,19 @@ class PicoTermKeyTests(unittest.TestCase):
         self.assertEqual(letter.name, Key.CHAR)
         self.assertEqual(letter.value, "q")
 
+    def test_decodes_terminal_function_keys(self):
+        from picoterm.keys import Key, parse_key
+
+        self.assertEqual(parse_key(b"\x1bOP").name, Key.F1)
+        self.assertEqual(parse_key(b"\x1b[15~").name, Key.F5)
+        self.assertEqual(parse_key(b"\x1b[21~").name, Key.F10)
+
+    def test_decodes_ctrl_modified_terminal_function_key(self):
+        from picoterm.appkeys import is_app_exit_key
+        from picoterm.keys import parse_key
+
+        self.assertTrue(is_app_exit_key(parse_key(b"\x1b[15;5~")))
+
 
 if __name__ == "__main__":
     unittest.main()

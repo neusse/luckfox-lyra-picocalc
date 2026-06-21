@@ -48,6 +48,48 @@ class EvdevKeyTests(unittest.TestCase):
         self.assertEqual((equal.name, equal.value), (Key.CHAR, "="))
         self.assertEqual((space.name, space.value), (Key.CHAR, " "))
 
+    def test_decodes_function_keys_f1_through_f10(self):
+        from picoterm.evdev import EV_KEY, KEY_F1, KEY_F10, KEY_F5, parse_input_event
+        from picoterm.keys import Key
+
+        f1 = parse_input_event(struct.pack("<llHHi", 0, 0, EV_KEY, KEY_F1, 1))
+        f5 = parse_input_event(struct.pack("<llHHi", 0, 0, EV_KEY, KEY_F5, 1))
+        f10 = parse_input_event(struct.pack("<llHHi", 0, 0, EV_KEY, KEY_F10, 1))
+
+        self.assertEqual(f1.name, Key.F1)
+        self.assertEqual(f5.name, Key.F5)
+        self.assertEqual(f10.name, Key.F10)
+
+    def test_ctrl_f5_is_standard_app_exit_key(self):
+        from picoterm.appkeys import is_app_exit_key
+        from picoterm.evdev import EV_KEY, KEY_F5, parse_input_event
+
+        f5 = parse_input_event(struct.pack("<llHHi", 0, 0, EV_KEY, KEY_F5, 1), ctrl=True)
+
+        self.assertTrue(is_app_exit_key(f5))
+
+    def test_decodes_calculator_keys_and_shifted_operators(self):
+        from picoterm.evdev import EV_KEY, KEY_5, KEY_8, KEY_C, KEY_DOT, KEY_EQUAL, KEY_P, KEY_SLASH, KEY_X, parse_input_event
+        from picoterm.keys import Key
+
+        dot = parse_input_event(struct.pack("<llHHi", 0, 0, EV_KEY, KEY_DOT, 1))
+        slash = parse_input_event(struct.pack("<llHHi", 0, 0, EV_KEY, KEY_SLASH, 1))
+        x_key = parse_input_event(struct.pack("<llHHi", 0, 0, EV_KEY, KEY_X, 1))
+        c_key = parse_input_event(struct.pack("<llHHi", 0, 0, EV_KEY, KEY_C, 1))
+        p_key = parse_input_event(struct.pack("<llHHi", 0, 0, EV_KEY, KEY_P, 1))
+        plus = parse_input_event(struct.pack("<llHHi", 0, 0, EV_KEY, KEY_EQUAL, 1), shift=True)
+        star = parse_input_event(struct.pack("<llHHi", 0, 0, EV_KEY, KEY_8, 1), shift=True)
+        percent = parse_input_event(struct.pack("<llHHi", 0, 0, EV_KEY, KEY_5, 1), shift=True)
+
+        self.assertEqual((dot.name, dot.value), (Key.CHAR, "."))
+        self.assertEqual((slash.name, slash.value), (Key.CHAR, "/"))
+        self.assertEqual((x_key.name, x_key.value), (Key.CHAR, "x"))
+        self.assertEqual((c_key.name, c_key.value), (Key.CHAR, "c"))
+        self.assertEqual((p_key.name, p_key.value), (Key.CHAR, "p"))
+        self.assertEqual((plus.name, plus.value), (Key.CHAR, "+"))
+        self.assertEqual((star.name, star.value), (Key.CHAR, "*"))
+        self.assertEqual((percent.name, percent.value), (Key.CHAR, "%"))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -47,6 +47,12 @@ class PicoCalcBubbleAppTests(unittest.TestCase):
         self.assertEqual(module.key_to_action(KeyPress(Key.DELETE)), "zoom_out")
         self.assertEqual(module.key_to_action(KeyPress(Key.LEFT)), "left")
 
+    def test_ctrl_f5_quits_bubble(self):
+        module = self.load_module()
+        from picoterm.keys import Key, KeyPress
+
+        self.assertEqual(module.key_to_action(KeyPress(Key.F5, ctrl=True)), "quit")
+
 
 if __name__ == "__main__":
     unittest.main()

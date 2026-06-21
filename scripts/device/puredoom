@@ -1,0 +1,43 @@
+#!/bin/sh
+set -eu
+
+BIN="/usr/libexec/picocalc/puredoom"
+TTY="/dev/tty1"
+LOG="/tmp/puredoom.log"
+PIDFILE="/tmp/puredoom.pid"
+
+export SDL_VIDEODRIVER="${SDL_VIDEODRIVER:-directfb}"
+export SDL_AUDIODRIVER="${SDL_AUDIODRIVER:-dummy}"
+export DOOMWADDIR="${DOOMWADDIR:-/usr/share/puredoom}"
+
+is_running() {
+	ps | grep "$BIN" | grep -v grep >/dev/null 2>&1
+}
+
+running_pid() {
+	ps | awk -v bin="$BIN" '$0 ~ bin && $0 !~ /awk/ { print $1; exit }'
+}
+
+if is_running; then
+	pid="$(running_pid)"
+	echo "puredoom is already running on the PicoCalc console as PID ${pid:-unknown}."
+	echo "Stop it with: kill ${pid:-PID}"
+	exit 0
+fi
+
+case "$(tty 2>/dev/null || true)" in
+	/dev/tty[1-9]*)
+		exec "$BIN" "$@"
+		;;
+esac
+
+: > "$LOG"
+setsid "$BIN" "$@" <"$TTY" >>"$LOG" 2>&1 &
+pid="$!"
+echo "$pid" > "$PIDFILE"
+
+chvt 1 >/dev/null 2>&1 || true
+
+echo "puredoom started on $TTY as PID $pid."
+echo "Use the physical PicoCalc keyboard/screen to interact with it."
+echo "Log: $LOG"

@@ -10,6 +10,7 @@ import time
 
 from picofb import Display
 from picogames.bubble import BubbleUniverse
+from picoterm.appkeys import is_app_exit_key
 from picoterm.evdev import EventKeyboard, find_picocalc_event
 from picoterm.keys import Key, KeyPress
 from picoterm.screen import RawTerminal
@@ -40,6 +41,8 @@ def open_keyboard(path: str | None = None):
 
 
 def key_to_action(key: KeyPress) -> str | None:
+    if is_app_exit_key(key):
+        return "quit"
     if key.name == Key.LEFT:
         return "left"
     if key.name == Key.RIGHT:

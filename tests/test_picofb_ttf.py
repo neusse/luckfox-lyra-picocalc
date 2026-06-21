@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 
 from picofb import BLACK, RED, WHITE, Canvas
-from picofb.ttf import resolve_font
+from picofb.ttf import measure_ttf_text, resolve_font
 
 
 class TrueTypeTextTests(unittest.TestCase):
@@ -42,6 +42,15 @@ class TrueTypeTextTests(unittest.TestCase):
             if canvas.pixel(x, y) == BLACK
         )
         self.assertGreater(black_pixels, 0)
+
+    def test_measure_ttf_text_returns_real_bounds(self):
+        small = measure_ttf_text("Hi", font="DejaVuSans.ttf", size=12)
+        large = measure_ttf_text("Hi", font="DejaVuSans.ttf", size=24)
+
+        self.assertGreater(small.width, 0)
+        self.assertGreater(small.height, 0)
+        self.assertGreater(large.width, small.width)
+        self.assertGreater(large.height, small.height)
 
 
 if __name__ == "__main__":

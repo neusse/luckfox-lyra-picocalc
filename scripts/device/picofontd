@@ -1,0 +1,31 @@
+#!/bin/sh
+set -eu
+
+RUN_DIR="${PICOFONT_RUN_DIR:-/run/picofont}"
+FIFO="$RUN_DIR/request"
+LOG="${PICOFONT_LOG:-/var/log/picofontd.log}"
+PICOFONT="${PICOFONT_BIN:-/usr/bin/picofont}"
+
+mkdir -p "$RUN_DIR"
+rm -f "$FIFO"
+mkfifo "$FIFO"
+chmod 622 "$FIFO"
+
+echo "picofontd started" >> "$LOG"
+
+while true; do
+	if read -r choice < "$FIFO"; then
+		case "$choice" in
+			original|tiny|6x8|60|5x8|small|12|40|14|16|18|20)
+				if "$PICOFONT" --apply-root "$choice" >> "$LOG" 2>&1; then
+					echo "loaded $choice" >> "$LOG"
+				else
+					echo "failed $choice" >> "$LOG"
+				fi
+				;;
+			*)
+				echo "ignored invalid request: $choice" >> "$LOG"
+				;;
+		esac
+	fi
+done

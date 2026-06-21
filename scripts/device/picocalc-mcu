@@ -5,7 +5,7 @@ BASE="/sys/bus/i2c/devices/0-001f"
 
 usage() {
 	cat <<'USAGE'
-Usage: picocalc-mcu <status|battery|screen-backlight|keyboard-backlight> [value]
+Usage: picocalc-mcu <status|battery|screen-backlight|keyboard-backlight|poweroff> [value]
 
 Commands:
   status                 Show battery and backlight values
@@ -14,6 +14,7 @@ Commands:
   screen-backlight N     Set screen backlight value, 0..255
   keyboard-backlight     Show keyboard backlight value
   keyboard-backlight N   Set keyboard backlight value, 0..255
+  poweroff N             Set PicoCalc poweroff delay for next halt/poweroff, 0..63
 USAGE
 }
 
@@ -48,6 +49,25 @@ write_attr() {
 	echo "$value" > "$BASE/$attr"
 }
 
+write_delay() {
+	attr="$1"
+	value="$2"
+
+	case "$value" in
+		''|*[!0-9]*)
+			echo "Value must be an integer from 0 to 63" >&2
+			exit 2
+			;;
+	esac
+	if [ "$value" -gt 63 ]; then
+		echo "Value must be an integer from 0 to 63" >&2
+		exit 2
+	fi
+
+	need_attr "$attr"
+	echo "$value" > "$BASE/$attr"
+}
+
 cmd="${1:-status}"
 case "$cmd" in
 	status)
@@ -79,6 +99,14 @@ case "$cmd" in
 			read_attr keyboard_backlight
 		elif [ $# -eq 2 ]; then
 			write_attr keyboard_backlight "$2"
+		else
+			usage >&2
+			exit 2
+		fi
+		;;
+	poweroff)
+		if [ $# -eq 2 ]; then
+			write_delay poweroff_delay "$2"
 		else
 			usage >&2
 			exit 2

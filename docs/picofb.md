@@ -19,10 +19,10 @@ $env:PYTHONPATH = "$PWD\python"; python -m unittest discover -s tests -p "test_p
 ## Run On The PicoCalc
 
 ```powershell
-python .\scripts\host\luckfox-dev.py runpy .\examples\python\fb_demo.py
+python .\tools\luckfox-dev.py runpy .\examples\python\fb_demo.py
 ```
 
-`scripts/host/luckfox-dev.py runpy` syncs the local `python/` package tree to `/home/neusse/luckfox-dev/python` and sets `PYTHONPATH` before running the script as `neusse`.
+`tools/luckfox-dev.py runpy` syncs the local `python/` package tree to `/home/neusse/luckfox-dev/python` and sets `PYTHONPATH` before running the script as `neusse`.
 
 ## Permission Setup
 
@@ -141,6 +141,8 @@ $adb = Join-Path $env:LOCALAPPDATA "Android\Sdk\platform-tools\adb.exe"
 
 - `text()` uses a built-in 5x7 bitmap font and has no dependencies.
 - `text_ttf()` renders scalable TrueType fonts using Pillow or system FreeType.
+- `measure_ttf_text()` returns rendered text bounds for accurate centering and
+  right alignment.
 - `picocalc-screenshot` reads the RGB565 framebuffer and saves a PNG using only Python's standard library.
 - Lowercase letters render through uppercase fallback.
 - Drawing clips silently when coordinates are outside the screen.

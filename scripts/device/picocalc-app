@@ -14,20 +14,60 @@ from pathlib import Path
 DEFAULT_ROOT = "/home/neusse/luckfox-dev"
 DEFAULT_VENV = "/home/neusse/venvs/nonroot"
 CONSOLE_TTY = "/dev/tty1"
-CONSOLE_APPS = {"bubble", "sudoku"}
-INLINE_ARGS = {"--once", "--menu-once", "-h", "--help", "help"}
+CONSOLE_APPS = {"breakout", "bubble", "calculator", "chess", "clock", "launcher", "minesweeper", "sudoku", "weather"}
+ALWAYS_DETACH_APPS = {"chess"}
+FRAMEBUFFER_APPS = CONSOLE_APPS | ALWAYS_DETACH_APPS | {"doom"}
+INLINE_ARGS = {"--once", "--list", "--menu-once", "-h", "--help", "help"}
 APP_ALIASES = {
     "bubble": "bubble",
+    "breakout": "breakout",
+    "calculator": "calculator",
+    "chess": "chess",
+    "clock": "clock",
+    "doom": "doom",
+    "email": "alpine",
+    "launcher": "launcher",
+    "mail": "alpine",
+    "minesweeper": "minesweeper",
+    "picocalc-doom": "doom",
+    "picocalc-email": "alpine",
+    "picocalc-mail": "alpine",
     "picocalc-bubble": "bubble",
+    "picocalc-breakout": "breakout",
+    "picocalc-calculator": "calculator",
+    "picocalc-chess": "chess",
+    "picocalc-clock": "clock",
+    "picocalc-launcher": "launcher",
+    "picocalc-minesweeper": "minesweeper",
     "picocalc-weather": "weather",
     "picocalc-sudoku": "sudoku",
     "sudoku": "sudoku",
     "weather": "weather",
+    "zork": "zork",
+    "alpine": "alpine",
+    "puredoom": "doom",
+    "picozork": "zork",
+    "picocalc-zork": "zork",
 }
 APP_SCRIPTS = {
     "bubble": "picocalc_bubble.py",
+    "breakout": "picocalc_breakout.py",
+    "calculator": "picocalc_calculator.py",
+    "clock": "picocalc_fancy_clock.py",
+    "launcher": "picocalc_launcher.py",
+    "minesweeper": "picocalc_minesweeper.py",
     "sudoku": "picocalc_sudoku.py",
     "weather": "picocalc_weather.py",
+    "zork": "picocalc_zork.py",
+}
+NATIVE_APP_COMMANDS = {
+    "alpine": "/usr/bin/alpine",
+    "chess": "/usr/libexec/picocalc/chess",
+    "doom": "/usr/bin/puredoom",
+}
+NATIVE_PROCESS_MATCHES = {
+    "chess": ["/usr/libexec/picocalc/chess"],
+    "doom": ["/usr/bin/puredoom", "/usr/libexec/picocalc/puredoom"],
 }
 DEVICE_PATHSEP = ":"
 
@@ -37,6 +77,7 @@ class AppSpec:
     app: str
     script: str
     args: list[str]
+    native: bool = False
 
 
 def project_root() -> str:
@@ -48,19 +89,45 @@ def venv_root() -> str:
 
 
 def usage() -> str:
-    apps = ", ".join(sorted(APP_SCRIPTS))
+    apps = ", ".join(sorted(set(APP_SCRIPTS) | set(NATIVE_APP_COMMANDS)))
     return (
         "usage: picocalc-app <app> [args...]\n"
+        "       alpine [args...]\n"
         "       bubble [args...]\n"
+        "       breakout [args...]\n"
+        "       calculator [args...]\n"
+        "       chess [args...]\n"
+        "       doom [args...]\n"
+        "       minesweeper [args...]\n"
         "       weather [args...]\n"
-        "       sudoku [args...]\n\n"
+        "       sudoku [args...]\n"
+        "       zork [args...]\n\n"
         f"apps: {apps}\n"
         "examples:\n"
+        "  picocalc-app alpine\n"
         "  picocalc-app weather --once\n"
         "  picocalc-app bubble --once\n"
+        "  picocalc-app breakout\n"
+        "  picocalc-app calculator\n"
+        "  picocalc-app chess\n"
+        "  picocalc-app doom\n"
+        "  picocalc-app clock\n"
+        "  picocalc-app launcher\n"
+        "  picocalc-app minesweeper\n"
         "  picocalc-app sudoku --demo --once\n"
+        "  picocalc-app zork --list\n"
         "  sudoku --new medium\n"
+        "  chess\n"
+        "  breakout\n"
+        "  clock\n"
+        "  doom\n"
+        "  email\n"
+        "  launcher\n"
+        "  mail\n"
+        "  picocalc-calculator\n"
+        "  picocalc-minesweeper\n"
         "  weather\n"
+        "  zork\n"
     )
 
 
@@ -70,7 +137,7 @@ def normalize_app(name: str) -> str:
 
 def resolve_invocation(program: str, argv: list[str]) -> AppSpec:
     invoked = normalize_app(Path(program).name)
-    if invoked in APP_SCRIPTS:
+    if invoked in APP_SCRIPTS or invoked in NATIVE_APP_COMMANDS:
         app = invoked
         app_args = list(argv)
     else:
@@ -78,6 +145,9 @@ def resolve_invocation(program: str, argv: list[str]) -> AppSpec:
             raise SystemExit(usage())
         app = normalize_app(argv[0])
         app_args = list(argv[1:])
+
+    if app in NATIVE_APP_COMMANDS:
+        return AppSpec(app=app, script=NATIVE_APP_COMMANDS[app], args=app_args, native=True)
 
     try:
         script_name = APP_SCRIPTS[app]
@@ -113,6 +183,12 @@ def runner_for(script: str, args: list[str], exists=os.path.exists) -> list[str]
     return [python, script, *args]
 
 
+def runner_for_spec(spec: AppSpec) -> list[str]:
+    if spec.native:
+        return [spec.script, *spec.args]
+    return runner_for(spec.script, spec.args)
+
+
 def is_physical_console(path: str) -> bool:
     return path.startswith("/dev/tty") and not path.startswith("/dev/tty0")
 
@@ -133,6 +209,8 @@ def should_run_inline(args: list[str]) -> bool:
 
 
 def should_detach_to_console(spec: AppSpec, ttyname=None) -> bool:
+    if spec.app in ALWAYS_DETACH_APPS and not should_run_inline(spec.args):
+        return True
     return (
         spec.app in CONSOLE_APPS
         and not should_run_inline(spec.args)
@@ -153,7 +231,7 @@ def console_launch_message(spec: AppSpec, pid: int) -> str:
 
 
 def launch_on_console(spec: AppSpec) -> int:
-    runner = runner_for(spec.script, spec.args)
+    runner = runner_for_spec(spec)
     env = build_environment()
     log_path = console_log_path(spec)
 
@@ -161,7 +239,7 @@ def launch_on_console(spec: AppSpec) -> int:
         process = subprocess.Popen(
             runner,
             stdin=console,
-            stdout=console,
+            stdout=log,
             stderr=log,
             env=env,
             start_new_session=True,
@@ -219,11 +297,40 @@ def running_processes_for(
 
 def running_app_message(spec: AppSpec, running: list[tuple[int, str]]) -> str:
     pid = running[0][0]
-    return (
+    message = (
         f"{spec.app} is already running on the PicoCalc console as PID {pid}.\n"
         "Not starting a second copy.\n"
-        f"Stop it with: kill {pid}\n"
-        f"For a one-shot render after stopping it: picocalc-app {spec.app} --once"
+        f"Stop it with: kill {pid}"
+    )
+    if not spec.native:
+        message += f"\nFor a one-shot render after stopping it: picocalc-app {spec.app} --once"
+    return message
+
+
+def framebuffer_process_specs() -> list[tuple[str, str]]:
+    specs: list[tuple[str, str]] = []
+    for app in sorted(FRAMEBUFFER_APPS):
+        if app in APP_SCRIPTS:
+            specs.append((app, posixpath.join(project_root(), APP_SCRIPTS[app])))
+        for process in NATIVE_PROCESS_MATCHES.get(app, []):
+            specs.append((app, process))
+    return specs
+
+
+def running_framebuffer_processes(proc_root: str | Path = "/proc") -> list[tuple[str, int, str]]:
+    running: list[tuple[str, int, str]] = []
+    for app, process in framebuffer_process_specs():
+        for pid, cmdline in running_processes_for(process, proc_root=proc_root):
+            running.append((app, pid, cmdline))
+    return sorted(running, key=lambda item: (item[1], item[0]))
+
+
+def framebuffer_busy_message(spec: AppSpec, running: list[tuple[str, int, str]]) -> str:
+    app, pid, _ = running[0]
+    return (
+        f"Cannot start {spec.app}; {app} is already using the PicoCalc console as PID {pid}.\n"
+        "Not starting a second framebuffer app.\n"
+        f"Stop it with: kill {pid}"
     )
 
 
@@ -247,7 +354,14 @@ def main(argv: list[str] | None = None) -> int:
         print(running_app_message(spec, running))
         return 1
 
-    if should_detach_to_console(spec):
+    detach = should_detach_to_console(spec)
+    if detach:
+        framebuffer_running = running_framebuffer_processes()
+        if framebuffer_running:
+            print(framebuffer_busy_message(spec, framebuffer_running))
+            return 1
+
+    if detach:
         try:
             pid = launch_on_console(spec)
         except OSError as exc:
@@ -256,7 +370,8 @@ def main(argv: list[str] | None = None) -> int:
         print(console_launch_message(spec, pid))
         return 0
 
-    os.execvpe(runner_for(spec.script, spec.args)[0], runner_for(spec.script, spec.args), build_environment())
+    runner = runner_for_spec(spec)
+    os.execvpe(runner[0], runner, build_environment())
     return 127
 
 

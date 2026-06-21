@@ -84,6 +84,38 @@ class DisplayTests(unittest.TestCase):
         self.assertEqual(data[offset : offset + 2], bytes([0x00, 0xF8]))
         self.assertEqual(data[20:24], bytes(4))
 
+    def test_show_region_writes_only_requested_rectangle(self):
+        root, fb_path = self.make_display_files(width=4, height=3, stride=8)
+        display = Display(str(fb_path), sysfs_root=str(root), fb_name="fb0")
+        self.addCleanup(display.close)
+
+        display.fill(RED)
+        fb_path.write_bytes(bytes(8 * 3))
+
+        self.assertIs(display.show_region(1, 1, 2, 1), display)
+
+        data = fb_path.read_bytes()
+        self.assertEqual(data[0:8], bytes(8))
+        self.assertEqual(data[8:10], bytes(2))
+        self.assertEqual(data[10:14], bytes([0x00, 0xF8]) * 2)
+        self.assertEqual(data[14:16], bytes(2))
+        self.assertEqual(data[16:24], bytes(8))
+
+    def test_show_regions_batches_multiple_rectangles(self):
+        root, fb_path = self.make_display_files(width=4, height=3, stride=8)
+        display = Display(str(fb_path), sysfs_root=str(root), fb_name="fb0")
+        self.addCleanup(display.close)
+
+        display.fill(RED)
+        fb_path.write_bytes(bytes(8 * 3))
+
+        self.assertIs(display.show_regions([(0, 0, 1, 1), (3, 2, 1, 1)]), display)
+
+        data = fb_path.read_bytes()
+        self.assertEqual(data[0:2], bytes([0x00, 0xF8]))
+        self.assertEqual(data[2:22], bytes(20))
+        self.assertEqual(data[22:24], bytes([0x00, 0xF8]))
+
     def test_context_manager_closes_framebuffer(self):
         root, fb_path = self.make_display_files()
 

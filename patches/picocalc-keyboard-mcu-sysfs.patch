@@ -1,11 +1,14 @@
+diff --git a/drivers/input/keyboard/picocalc-keyboard.c b/drivers/input/keyboard/picocalc-keyboard.c
+index eb2fffa..c107745 100755
 --- a/drivers/input/keyboard/picocalc-keyboard.c
 +++ b/drivers/input/keyboard/picocalc-keyboard.c
-@@ -10,9 +10,17 @@
+@@ -10,9 +10,21 @@
  #include <linux/input.h>
  #include <linux/workqueue.h>
  #include <linux/of.h>
 +#include <linux/kstrtox.h>
 +#include <linux/mutex.h>
++#include <linux/reboot.h>
  
  #define DRV_NAME    	"picocalc-keyboard"
 -#define PCKB_REG		0x09
@@ -14,20 +17,24 @@
 +#define REG_ID_FIF		0x09
 +#define REG_ID_BK2		0x0a
 +#define REG_ID_BAT		0x0b
++#define REG_ID_OFF		0x0e
 +
 +#define PCKB_REG		REG_ID_FIF
++#define PICOCALC_POWEROFF_MAX_DELAY	63
++#define PICOCALC_POWEROFF_DEFAULT_DELAY	8
  #define KEYCODE_SIZE	256
  #define INTERVAL    	20 //ms
  
-@@ -26,6 +34,7 @@
+@@ -26,6 +38,8 @@ struct picocalc_keyboard {
  	struct input_dev *input;
  	struct delayed_work work;
  	int page_key;
 +	struct mutex i2c_lock;
++	u8 poweroff_delay;
  	int interval;
  };
  
-@@ -84,6 +93,39 @@
+@@ -84,6 +98,39 @@ static unsigned short xlate[KEYCODE_SIZE] = {
  	[' '] = KEY_SPACE, ['\n'] = KEY_ENTER,
  };
  
@@ -67,7 +74,7 @@
  static void pckb_work_handler(struct work_struct *work)
  {
      struct picocalc_keyboard *pckb = container_of(work,
-@@ -91,16 +133,17 @@
+@@ -91,16 +138,17 @@ static void pckb_work_handler(struct work_struct *work)
      struct i2c_client *client = pckb->client;
  	u8 keystate;
  	u8 keycode;
@@ -89,7 +96,7 @@
  
  	if (keystate != KEY_STATE_PRESSED && keystate != KEY_STATE_RELEASED)
  		goto reschedule;
-@@ -131,6 +174,129 @@
+@@ -131,6 +179,159 @@ reschedule:
      schedule_delayed_work(&pckb->work, msecs_to_jiffies(pckb->interval));
  }
  
@@ -206,12 +213,42 @@
 +}
 +static DEVICE_ATTR_RW(keyboard_backlight);
 +
++static ssize_t poweroff_delay_show(struct device *dev,
++				      struct device_attribute *attr, char *buf)
++{
++	struct picocalc_keyboard *pckb = dev_get_drvdata(dev);
++
++	return sysfs_emit(buf,
++		"%u\n", pckb->poweroff_delay);
++}
++
++static ssize_t poweroff_delay_store(struct device *dev,
++				       struct device_attribute *attr,
++				       const char *buf, size_t count)
++{
++	struct picocalc_keyboard *pckb = dev_get_drvdata(dev);
++	u8 delay;
++	int ret;
++
++	ret = pckb_parse_u8(buf, &delay);
++	if (ret)
++		return ret;
++	if (delay > PICOCALC_POWEROFF_MAX_DELAY)
++		return -EINVAL;
++
++	pckb->poweroff_delay = delay;
++
++	return count;
++}
++static DEVICE_ATTR_RW(poweroff_delay);
++
 +static struct attribute *pckb_attrs[] = {
 +	&dev_attr_battery_raw.attr,
 +	&dev_attr_battery_percent.attr,
 +	&dev_attr_battery_status.attr,
 +	&dev_attr_screen_backlight.attr,
 +	&dev_attr_keyboard_backlight.attr,
++	&dev_attr_poweroff_delay.attr,
 +	NULL,
 +};
 +ATTRIBUTE_GROUPS(pckb);
@@ -219,15 +256,16 @@
  static int pckb_probe(struct i2c_client *client, const struct i2c_device_id *id)
  {
  	struct picocalc_keyboard *pckb;
-@@ -144,6 +310,7 @@
+@@ -144,6 +345,8 @@ static int pckb_probe(struct i2c_client *client, const struct i2c_device_id *id)
      
      pckb->client = client;
      pckb->interval = INTERVAL;
 +	mutex_init(&pckb->i2c_lock);
++	pckb->poweroff_delay = PICOCALC_POWEROFF_DEFAULT_DELAY;
  	pckb->page_key = 0;
  
  	i2c_set_clientdata(client, pckb);
-@@ -175,6 +342,12 @@
+@@ -175,6 +378,12 @@ static int pckb_probe(struct i2c_client *client, const struct i2c_device_id *id)
  		goto error;
  	}
  
@@ -240,11 +278,42 @@
      INIT_DELAYED_WORK(&pckb->work, pckb_work_handler);
      schedule_delayed_work(&pckb->work, msecs_to_jiffies(pckb->interval));
  	return 0;
-@@ -188,6 +361,7 @@
+@@ -188,6 +397,28 @@ static void pckb_remove(struct i2c_client *client)
  
      pckb = i2c_get_clientdata(client);
      cancel_delayed_work_sync(&pckb->work);
 +	sysfs_remove_groups(&client->dev.kobj, pckb_groups);
++}
++
++static void pckb_shutdown(struct i2c_client *client)
++{
++	struct picocalc_keyboard *pckb = i2c_get_clientdata(client);
++	int ret;
++
++	if (!pckb)
++		return;
++
++	cancel_delayed_work_sync(&pckb->work);
++
++	if (system_state == SYSTEM_RESTART)
++		return;
++
++	ret = pckb_write_u8(pckb, REG_ID_OFF, pckb->poweroff_delay);
++	if (ret)
++		dev_err(&client->dev, "Failed to request PicoCalc poweroff: %d\n", ret);
++	else
++		dev_info(&client->dev, "PicoCalc MCU poweroff requested in %u seconds\n",
++			 pckb->poweroff_delay);
  }
  
  static const struct i2c_device_id pckb_i2c_match[] = {
+@@ -204,7 +435,8 @@ MODULE_DEVICE_TABLE(of, pckb_of_match);
+ 
+ static struct i2c_driver pckb_driver = {
+ 	.probe		= pckb_probe,
+-    .remove     = pckb_remove,
++	.shutdown	= pckb_shutdown,
++	.remove		= pckb_remove,
+ 	.id_table	= pckb_i2c_match,
+ 	.driver		= {
+ 		.name		= DRV_NAME,

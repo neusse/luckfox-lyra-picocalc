@@ -3,33 +3,28 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import nullcontext
 import importlib.util
 import os
 import json
-import shlex
 import ssl
-import subprocess
 import time
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlencode
 from urllib.error import URLError
 
-try:
-    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
-except ImportError:  # pragma: no cover - Python 3.9+ normally has zoneinfo.
-    ZoneInfo = None
-    ZoneInfoNotFoundError = KeyError
-
 from picofb import BLACK, BLUE, CYAN, GREEN, MAGENTA, RED, WHITE, YELLOW, Display, color565, load_bmp
+from picoterm.appkeys import is_app_exit_key
+from picoterm.evdev import EventKeyboard, find_picocalc_event
+from picoterm.screen import RawTerminal
 
 
 API_ROOT = "https://api.openweathermap.org/data/2.5"
 DEFAULT_UNITS = "imperial"
 DEFAULT_WEATHER_INTERVAL = 300
 DEFAULT_CLOCK_INTERVAL = 30
-NTP_SCRIPT = "/usr/local/sbin/picocalc_ntp.py"
 
 DARK = color565(2, 7, 14)
 PANEL = color565(11, 24, 34)
@@ -43,7 +38,6 @@ SNOW = color565(210, 248, 255)
 FOG = color565(170, 180, 185)
 GOOD = color565(112, 245, 110)
 BATTERY_PATH = "/sys/bus/i2c/devices/0-001f/battery_percent"
-PACIFIC_ZONE = "America/Los_Angeles"
 _ICON_CACHE = {}
 
 
@@ -161,35 +155,6 @@ def fetch_weather(settings: Settings) -> tuple[dict, dict]:
     return fetch_json(current_url(settings)), fetch_json(forecast_url(settings))
 
 
-def _command_runner(command: list[str], timeout: int) -> int:
-    try:
-        completed = subprocess.run(
-            command,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            timeout=timeout,
-            check=False,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return 127
-    return completed.returncode
-
-
-def sync_time_on_start(command: str | None = None, runner=_command_runner, timeout: int = 20) -> bool:
-    if command:
-        commands = [shlex.split(command)]
-    else:
-        commands = []
-        if os.name == "posix" and getattr(os, "geteuid", lambda: 1)() != 0:
-            commands.append(["sudo", "-n", NTP_SCRIPT])
-        commands.append([NTP_SCRIPT])
-
-    for candidate in commands:
-        if runner(candidate, timeout) == 0:
-            return True
-    return False
-
-
 def fmt_temp(value) -> str:
     if value is None:
         return "--F"
@@ -235,34 +200,12 @@ def local_day_name(epoch: int, offset: int = 0) -> str:
     return dt.strftime("%a")
 
 
-def _nth_weekday(year: int, month: int, weekday: int, n: int) -> int:
-    first = datetime(year, month, 1)
-    return 1 + ((weekday - first.weekday()) % 7) + (n - 1) * 7
-
-
-def _pacific_fallback_tz(utc_dt: datetime) -> timezone:
-    year = utc_dt.year
-    dst_start = datetime(year, 3, _nth_weekday(year, 3, 6, 2), 10, tzinfo=timezone.utc)
-    dst_end = datetime(year, 11, _nth_weekday(year, 11, 6, 1), 9, tzinfo=timezone.utc)
-    if dst_start <= utc_dt < dst_end:
-        return timezone(timedelta(hours=-7), "PDT")
-    return timezone(timedelta(hours=-8), "PST")
-
-
-def pacific_datetime(value: datetime | None = None) -> datetime:
+def local_datetime(value: datetime | None = None) -> datetime:
     if value is None:
-        utc_dt = datetime.now(timezone.utc)
-    elif value.tzinfo is None:
+        return datetime.now().astimezone()
+    if value.tzinfo is None:
         return value
-    else:
-        utc_dt = value.astimezone(timezone.utc)
-
-    if ZoneInfo is not None:
-        try:
-            return utc_dt.astimezone(ZoneInfo(PACIFIC_ZONE))
-        except ZoneInfoNotFoundError:
-            pass
-    return utc_dt.astimezone(_pacific_fallback_tz(utc_dt))
+    return value.astimezone()
 
 
 def aggregate_forecast_daily(forecast_json: dict, days: int = 5) -> list[dict]:
@@ -407,6 +350,24 @@ def hide_console_cursor() -> None:
             continue
 
 
+def is_console_tty(path: str) -> bool:
+    return path.startswith("/dev/tty") and not path.startswith("/dev/tty0")
+
+
+def current_tty(ttyname=None) -> str:
+    ttyname = getattr(os, "ttyname", None) if ttyname is None else ttyname
+    if ttyname is None:
+        return ""
+    try:
+        return ttyname(0)
+    except OSError:
+        return ""
+
+
+def open_keyboard(path: str | None = None):
+    return EventKeyboard(path or find_picocalc_event())
+
+
 def draw_dashboard(
     display,
     current: dict,
@@ -425,7 +386,7 @@ def draw_dashboard(
     desc = title_case(weather.get("description") or "Weather")[:21]
     place = (current.get("name") or "PicoCalc")[:20]
     days = aggregate_forecast_daily(forecast, days=5)
-    now = pacific_datetime(now)
+    now = local_datetime(now)
 
     display.fill(DARK)
     display.fill_rect(0, 0, width, 34, PANEL2)
@@ -479,12 +440,7 @@ def run_once(
     settings: Settings,
     framebuffer: str = "/dev/fb0",
     icon_dir: Path | None = None,
-    *,
-    sync_clock: bool = True,
-    ntp_command: str | None = None,
 ) -> None:
-    if sync_clock:
-        sync_time_on_start(ntp_command)
     current, forecast = fetch_weather(settings)
     battery_percent = read_battery_percent()
     hide_console_cursor()
@@ -506,8 +462,6 @@ def run_loop(
     *,
     weather_interval: float = DEFAULT_WEATHER_INTERVAL,
     clock_interval: float = DEFAULT_CLOCK_INTERVAL,
-    sync_clock: bool = True,
-    ntp_command: str | None = None,
     max_cycles: int | None = None,
     display_factory=Display,
     fetcher=fetch_weather,
@@ -515,14 +469,14 @@ def run_loop(
     battery_reader=read_battery_percent,
     monotonic=time.monotonic,
     sleeper=time.sleep,
+    keyboard=None,
+    keyboard_path: str | None = None,
 ) -> None:
     if weather_interval <= 0:
         raise ValueError("weather_interval must be positive")
     if clock_interval <= 0:
         raise ValueError("clock_interval must be positive")
 
-    if sync_clock:
-        sync_time_on_start(ntp_command)
     hide_console_cursor()
 
     current = None
@@ -530,7 +484,13 @@ def run_loop(
     next_weather = 0.0
     cycles = 0
 
-    with display_factory(framebuffer) as display:
+    keyboard_context = nullcontext(keyboard)
+    terminal_context = nullcontext()
+    if keyboard is None and is_console_tty(current_tty()):
+        keyboard_context = open_keyboard(keyboard_path)
+        terminal_context = RawTerminal()
+
+    with terminal_context, display_factory(framebuffer) as display, keyboard_context as active_keyboard:
         while True:
             now_mono = monotonic()
             if current is None or forecast is None or now_mono >= next_weather:
@@ -552,7 +512,13 @@ def run_loop(
 
             next_clock = now_mono + clock_interval
             wake_at = min(next_clock, next_weather)
-            sleeper(max(0.0, wake_at - monotonic()))
+            while True:
+                if active_keyboard is not None and is_app_exit_key(active_keyboard.read_key(timeout=0.0)):
+                    return
+                remaining = wake_at - monotonic()
+                if remaining <= 0:
+                    break
+                sleeper(min(1.0, remaining))
 
 
 def main() -> int:
@@ -566,8 +532,7 @@ def main() -> int:
     parser.add_argument("--once", action="store_true", help="render once and exit")
     parser.add_argument("--weather-interval", type=float, default=DEFAULT_WEATHER_INTERVAL)
     parser.add_argument("--clock-interval", type=float, default=DEFAULT_CLOCK_INTERVAL)
-    parser.add_argument("--no-ntp-sync", action="store_true")
-    parser.add_argument("--ntp-command")
+    parser.add_argument("--keyboard", help="evdev keyboard path, default: auto-detect PicoCalc keyboard on console")
     args = parser.parse_args()
 
     settings = load_settings(args)
@@ -577,8 +542,6 @@ def main() -> int:
             settings,
             framebuffer=args.fb,
             icon_dir=icon_dir,
-            sync_clock=not args.no_ntp_sync,
-            ntp_command=args.ntp_command,
         )
     else:
         run_loop(
@@ -587,8 +550,7 @@ def main() -> int:
             icon_dir=icon_dir,
             weather_interval=args.weather_interval,
             clock_interval=args.clock_interval,
-            sync_clock=not args.no_ntp_sync,
-            ntp_command=args.ntp_command,
+            keyboard_path=args.keyboard,
         )
     return 0
 

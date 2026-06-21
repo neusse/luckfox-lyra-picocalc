@@ -83,6 +83,39 @@ class PicoCalcSudokuAppTests(unittest.TestCase):
         self.assertTrue(module.apply_key_action(game, "clear", None))
         self.assertEqual(game.grid[0][2], 0)
 
+    def test_dirty_cells_cover_old_and_new_cursor_context(self):
+        module = self.load_module()
+
+        dirty = module.dirty_cells_for_cursor_move((0, 2), (0, 3))
+
+        self.assertIn((0, 0), dirty)
+        self.assertIn((8, 2), dirty)
+        self.assertIn((8, 3), dirty)
+        self.assertIn((1, 1), dirty)
+        self.assertIn((1, 4), dirty)
+
+    def test_dirty_cells_are_merged_into_row_regions(self):
+        module = self.load_module()
+
+        regions = module.dirty_regions_for_cells({(0, 0), (0, 1), (0, 3), (1, 3)})
+
+        self.assertEqual(
+            regions,
+            [
+                (module.GRID_X, module.GRID_Y, module.CELL * 2 + module.SELECT_THICKNESS, module.CELL + module.SELECT_THICKNESS),
+                (module.GRID_X + module.CELL * 3, module.GRID_Y, module.CELL + module.SELECT_THICKNESS, module.CELL + module.SELECT_THICKNESS),
+                (module.GRID_X + module.CELL * 3, module.GRID_Y + module.CELL, module.CELL + module.SELECT_THICKNESS, module.CELL + module.SELECT_THICKNESS),
+            ],
+        )
+
+    def test_digit_sprite_is_trimmed_for_cell_centering(self):
+        module = self.load_module()
+
+        sprite = module.TEXT_CACHE.get("5", module.WHITE, size=25, fallback_scale=3)
+
+        self.assertLess(sprite.width, 28)
+        self.assertLess(sprite.height, 33)
+
     def test_interactive_app_rejects_ssh_tty(self):
         module = self.load_module()
 
@@ -91,6 +124,15 @@ class PicoCalcSudokuAppTests(unittest.TestCase):
 
         with self.assertRaises(SystemExit):
             module.require_console_tty(lambda _fd: "/dev/pts/0")
+
+    def test_ctrl_f5_quits_sudoku(self):
+        module = self.load_module()
+        from picoterm.keys import Key, KeyPress
+
+        action, value = module.key_to_action(KeyPress(Key.F5, ctrl=True))
+
+        self.assertEqual(action, "quit")
+        self.assertIsNone(value)
 
 
 if __name__ == "__main__":

@@ -3,7 +3,7 @@
 # Allow the non-root development user to read and write the PicoCalc console.
 
 fix_console_permissions() {
-	for dev in /dev/tty1 /dev/console; do
+	for dev in /dev/tty0 /dev/tty1 /dev/console; do
 		if [ -e "$dev" ]; then
 			chgrp tty "$dev" 2>/dev/null || true
 			chmod 0660 "$dev" 2>/dev/null || true

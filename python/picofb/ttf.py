@@ -20,10 +20,19 @@ from ctypes import (
     c_void_p,
     cast,
 )
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from .colors import BLACK
+
+
+@dataclass(frozen=True)
+class TtfTextBounds:
+    width: int
+    height: int
+    x_offset: int = 0
+    y_offset: int = 0
 
 
 def rgb565_to_rgb(color: int) -> tuple[int, int, int]:
@@ -62,6 +71,27 @@ def resolve_font(font: str | Path) -> str:
                 return candidate
 
     return font_text
+
+
+def measure_ttf_text(value: object, *, font: str | Path, size: int = 16) -> TtfTextBounds:
+    """Measure the rendered bounds for TrueType text."""
+    size = max(1, int(size))
+    text = str(value)
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+    except ImportError as exc:
+        return _measure_ttf_text_freetype(text, font=font, size=size, import_error=exc)
+
+    pil_font = ImageFont.truetype(resolve_font(font), size)
+    measure = Image.new("L", (1, 1), 0)
+    measure_draw = ImageDraw.Draw(measure)
+    bbox = measure_draw.multiline_textbbox((0, 0), text, font=pil_font)
+    return TtfTextBounds(
+        width=max(1, bbox[2] - bbox[0]),
+        height=max(1, bbox[3] - bbox[1]),
+        x_offset=bbox[0],
+        y_offset=bbox[1],
+    )
 
 
 def draw_ttf_text(
@@ -327,6 +357,43 @@ def _draw_ttf_text_freetype(
         freetype.FT_Done_FreeType(library)
 
     return canvas
+
+
+def _measure_ttf_text_freetype(
+    value: object,
+    *,
+    font: str | Path,
+    size: int,
+    import_error: ImportError,
+) -> TtfTextBounds:
+    try:
+        freetype = _load_freetype()
+    except ImportError as exc:
+        raise ImportError("PicoFB TrueType text requires Pillow or libfreetype") from import_error or exc
+
+    font_path = resolve_font(font)
+    if not Path(font_path).exists():
+        raise FileNotFoundError(f"TrueType font not found: {font}")
+
+    library = c_void_p()
+    if freetype.FT_Init_FreeType(byref(library)):
+        raise RuntimeError("failed to initialize FreeType")
+
+    face = c_void_p()
+    try:
+        if freetype.FT_New_Face(library, font_path.encode(), 0, byref(face)):
+            raise RuntimeError(f"failed to load TrueType font: {font_path}")
+        line_height = max(1, int(size))
+        if freetype.FT_Set_Pixel_Sizes(face, 0, line_height):
+            raise RuntimeError(f"failed to set TrueType font size: {size}")
+
+        lines = str(value).splitlines() or [""]
+        width = _measure_freetype_text(freetype, face, value, line_height)
+        return TtfTextBounds(width=max(1, width), height=max(1, line_height * len(lines)))
+    finally:
+        if face:
+            freetype.FT_Done_Face(face)
+        freetype.FT_Done_FreeType(library)
 
 
 def _measure_freetype_text(freetype, face, value: object, line_height: int) -> int:

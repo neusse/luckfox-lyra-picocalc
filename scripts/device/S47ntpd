@@ -1,0 +1,31 @@
+#!/bin/sh
+# Start BusyBox ntpd after Wi-Fi has an address.
+
+NTPD=/usr/sbin/ntpd
+
+case "$1" in
+	start)
+		[ -x "$NTPD" ] || exit 0
+		count=0
+		while ! ip -4 addr show wlan0 2>/dev/null | grep -q 'inet '; do
+			count=$((count + 1))
+			[ "$count" -ge 30 ] && exit 0
+			sleep 1
+		done
+		killall ntpd 2>/dev/null || true
+		"$NTPD" -p time.cloudflare.com -p pool.ntp.org -p time.google.com
+		;;
+	stop)
+		killall ntpd 2>/dev/null || true
+		;;
+	restart)
+		"$0" stop
+		"$0" start
+		;;
+	*)
+		echo "Usage: $0 {start|stop|restart}"
+		exit 1
+		;;
+esac
+
+exit 0

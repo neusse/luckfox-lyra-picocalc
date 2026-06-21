@@ -1,0 +1,24 @@
+#!/bin/sh
+
+case "$1" in
+	start)
+		if pgrep -f "/usr/sbin/picofontd" >/dev/null 2>&1; then
+			exit 0
+		fi
+
+		/usr/sbin/picofontd >/dev/null 2>&1 &
+		/usr/bin/picofont --apply-root small >/dev/null 2>&1 || true
+		;;
+	stop)
+		pkill -f "/usr/sbin/picofontd" >/dev/null 2>&1 || true
+		rm -f /run/picofont/request
+		;;
+	restart)
+		"$0" stop
+		"$0" start
+		;;
+	*)
+		echo "Usage: $0 {start|stop|restart}" >&2
+		exit 1
+		;;
+esac

@@ -1,0 +1,52 @@
+#!/bin/sh
+set -eu
+
+MCU="/usr/bin/picocalc-mcu"
+POWEROFF="/usr/sbin/poweroff"
+DEFAULT_DELAY=8
+
+usage() {
+	cat <<'USAGE'
+Usage: shutdown [delay-seconds]
+
+Cleanly shut down Linux and ask the PicoCalc MCU to cut power.
+
+delay-seconds defaults to 8 and must be 0..63.
+USAGE
+}
+
+die() {
+	echo "shutdown: $*" >&2
+	exit 1
+}
+
+delay="${1:-$DEFAULT_DELAY}"
+case "${delay}" in
+	-h|--help|help)
+		usage
+		exit 0
+		;;
+	''|*[!0-9]*)
+		die "delay must be an integer from 0 to 63"
+		;;
+esac
+
+[ $# -le 1 ] || die "too many arguments"
+[ "$(id -u)" -eq 0 ] || die "must run as root"
+[ "$delay" -le 63 ] || die "delay must be an integer from 0 to 63"
+
+echo "shutdown: syncing filesystems"
+sync
+
+if [ -x "$MCU" ]; then
+	if "$MCU" poweroff "$delay"; then
+		echo "shutdown: PicoCalc MCU poweroff requested in ${delay}s"
+	else
+		die "MCU poweroff request failed; boot a kernel with poweroff_delay support or use poweroff for Linux-only halt"
+	fi
+else
+	die "$MCU missing; use poweroff for Linux-only halt"
+fi
+
+sync
+exec "$POWEROFF"

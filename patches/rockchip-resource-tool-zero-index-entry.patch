@@ -1,0 +1,17 @@
+diff --git a/scripts/resource_tool.c b/scripts/resource_tool.c
+index 0000000..0000000 100644
+--- a/scripts/resource_tool.c
++++ b/scripts/resource_tool.c
+@@ -1479,8 +1479,10 @@ static bool write_index_tbl(const int file_num, const char **files)
+ 	index_tbl_entry entry;
+ 	char hash[20];	/* sha1 */
+ 	int i;
+ 
+-	memcpy(entry.tag, INDEX_TBL_ENTR_TAG, sizeof(entry.tag));
+ 	for (i = 0; i < file_num; i++) {
++		memset(&entry, 0, sizeof(entry));
++		memcpy(entry.tag, INDEX_TBL_ENTR_TAG, sizeof(entry.tag));
++
+ 		size_t file_size = get_file_size(files[i]);
+ 		if (file_size < 0)
+ 			goto end;

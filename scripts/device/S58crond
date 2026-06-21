@@ -1,0 +1,47 @@
+#!/bin/sh
+#
+# Start BusyBox crond with a persistent crontab directory.
+
+CROND="/usr/sbin/crond"
+CRON_DIR="/etc/crontabs"
+DEFAULT_CRON_DIR="/var/spool/cron/crontabs"
+
+prepare_cron_dir() {
+	mkdir -p "$CRON_DIR"
+	chmod 0700 "$CRON_DIR"
+
+	mkdir -p "$(dirname "$DEFAULT_CRON_DIR")"
+	if [ -L "$DEFAULT_CRON_DIR" ]; then
+		ln -sfn "$CRON_DIR" "$DEFAULT_CRON_DIR"
+	elif [ ! -e "$DEFAULT_CRON_DIR" ]; then
+		ln -s "$CRON_DIR" "$DEFAULT_CRON_DIR"
+	elif rmdir "$DEFAULT_CRON_DIR" 2>/dev/null; then
+		ln -s "$CRON_DIR" "$DEFAULT_CRON_DIR"
+	fi
+}
+
+case "$1" in
+	start)
+		[ -x "$CROND" ] || exit 0
+		prepare_cron_dir
+
+		if pidof crond >/dev/null 2>&1; then
+			exit 0
+		fi
+
+		"$CROND" -c "$CRON_DIR" -l 8 -S
+		;;
+	stop)
+		/sbin/start-stop-daemon -Kqox "$CROND" 2>/dev/null || true
+		;;
+	restart)
+		"$0" stop
+		"$0" start
+		;;
+	*)
+		echo "Usage: $0 {start|stop|restart}" >&2
+		exit 1
+		;;
+esac
+
+exit 0

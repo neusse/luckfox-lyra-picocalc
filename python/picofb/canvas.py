@@ -77,8 +77,13 @@ class Canvas:
 
         start = max(x, 0)
         end = min(x + width, self.width)
-        for px in range(start, end):
-            self.pixel(px, y, color)
+        if start >= end:
+            return self
+
+        offset = self._offset(start, y)
+        self.buffer[offset : offset + ((end - start) * 2)] = bytes(
+            [color & 0xFF, (color >> 8) & 0xFF]
+        ) * (end - start)
         return self
 
     def vline(self, x: int, y: int, height: int, color: int):
@@ -95,10 +100,17 @@ class Canvas:
         if width <= 0 or height <= 0:
             return self
 
+        start_x = max(x, 0)
+        end_x = min(x + width, self.width)
         start_y = max(y, 0)
         end_y = min(y + height, self.height)
+        if start_x >= end_x or start_y >= end_y:
+            return self
+
+        row = bytes([color & 0xFF, (color >> 8) & 0xFF]) * (end_x - start_x)
         for py in range(start_y, end_y):
-            self.hline(x, py, width, color)
+            offset = self._offset(start_x, py)
+            self.buffer[offset : offset + len(row)] = row
         return self
 
     def rect(self, x: int, y: int, width: int, height: int, color: int):
@@ -201,13 +213,13 @@ class Canvas:
             source_width = source.width
             source_height = source.height
             stride = source.width * 2
-            data = memoryview(bytes(source.buffer))
+            data = memoryview(source.buffer)
             transparent = None
         elif hasattr(source, "width") and hasattr(source, "height") and hasattr(source, "buffer"):
             source_width = source.width
             source_height = source.height
             stride = source.width * 2
-            data = memoryview(bytes(source.buffer))
+            data = memoryview(source.buffer)
             transparent = getattr(source, "transparent", None)
         elif isinstance(source, (bytes, bytearray, memoryview)):
             if width is None or height is None:
@@ -240,14 +252,36 @@ class Canvas:
             self.buffer[:] = data[: len(self.buffer)]
             return self
 
-        for source_y in range(source_height):
+        source_start_x = max(0, -int(x))
+        source_start_y = max(0, -int(y))
+        dest_x = max(0, int(x))
+        dest_y = max(0, int(y))
+        copy_width = min(source_width - source_start_x, self.width - dest_x)
+        copy_height = min(source_height - source_start_y, self.height - dest_y)
+        if copy_width <= 0 or copy_height <= 0:
+            return self
+
+        if transparent is None:
+            copy_bytes = copy_width * 2
+            for row in range(copy_height):
+                source_offset = ((source_start_y + row) * stride) + (source_start_x * 2)
+                target_offset = (((dest_y + row) * self.width) + dest_x) * 2
+                self.buffer[target_offset : target_offset + copy_bytes] = data[
+                    source_offset : source_offset + copy_bytes
+                ]
+            return self
+
+        for row in range(copy_height):
+            source_y = source_start_y + row
             row_offset = source_y * stride
-            for source_x in range(source_width):
-                if transparent is not None and transparent[(source_y * source_width) + source_x]:
+            target_y = dest_y + row
+            for col in range(copy_width):
+                source_x = source_start_x + col
+                if transparent[(source_y * source_width) + source_x]:
                     continue
                 offset = row_offset + (source_x * 2)
                 pixel_color = data[offset] | (data[offset + 1] << 8)
-                self.pixel(x + source_x, y + source_y, pixel_color)
+                self.pixel(dest_x + col, target_y, pixel_color)
 
         return self
 

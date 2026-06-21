@@ -109,6 +109,47 @@ class Display:
         self._fb.flush()
         return self
 
+    def show_region(self, x: int, y: int, width: int, height: int):
+        """Flush a rectangular canvas region to the framebuffer."""
+        return self.show_regions([(x, y, width, height)])
+
+    def show_regions(self, regions):
+        """Flush multiple rectangular canvas regions to the framebuffer."""
+        view = memoryview(self.buffer)
+        row_bytes = self.width * 2
+
+        wrote = False
+        for x, y, width, height in regions:
+            if width <= 0 or height <= 0:
+                continue
+
+            start_x = max(0, int(x))
+            start_y = max(0, int(y))
+            end_x = min(self.width, int(x) + int(width))
+            end_y = min(self.height, int(y) + int(height))
+            if start_x >= end_x or start_y >= end_y:
+                continue
+
+            copy_width = end_x - start_x
+            copy_bytes = copy_width * 2
+
+            if start_x == 0 and copy_width == self.width and self.stride == row_bytes:
+                start = start_y * row_bytes
+                end = end_y * row_bytes
+                self._fb.seek(start)
+                self._fb.write(view[start:end])
+            else:
+                for row in range(start_y, end_y):
+                    source_start = (row * row_bytes) + (start_x * 2)
+                    source_end = source_start + copy_bytes
+                    self._fb.seek((row * self.stride) + (start_x * 2))
+                    self._fb.write(view[source_start:source_end])
+            wrote = True
+
+        if wrote:
+            self._fb.flush()
+        return self
+
     def pixel(self, x: int, y: int, color: int | None = None):
         if color is None:
             return self.canvas.pixel(x, y)

@@ -2,8 +2,11 @@
 set -eu
 
 FONT_DIR="/usr/share/fonts/picocalc"
+PROJECT_DIR="${PICOCALC_DEV_ROOT:-/home/neusse/luckfox-dev}"
+DEJAVU_DIR="/usr/share/fonts/truetype/dejavu"
 
 mkdir -p "$FONT_DIR"
+mkdir -p "$DEJAVU_DIR"
 
 for font in \
 	/usr/share/directfb-1.7.7/decker.ttf \
@@ -17,11 +20,19 @@ do
 	fi
 done
 
+if [ -f "$PROJECT_DIR/fonts/DejaVuSansMono.ttf" ]; then
+	cp "$PROJECT_DIR/fonts/DejaVuSansMono.ttf" "$DEJAVU_DIR/DejaVuSansMono.ttf"
+	chmod 644 "$DEJAVU_DIR/DejaVuSansMono.ttf"
+fi
+
 chmod 755 "$FONT_DIR"
 
 if command -v fc-cache >/dev/null 2>&1; then
-	fc-cache -f "$FONT_DIR"
+	fc-cache -f "$FONT_DIR" "$DEJAVU_DIR"
 fi
 
 echo "Registered PicoCalc fonts:"
 find "$FONT_DIR" -type l -o -type f | sort
+if [ -f "$DEJAVU_DIR/DejaVuSansMono.ttf" ]; then
+	echo "$DEJAVU_DIR/DejaVuSansMono.ttf"
+fi

@@ -136,7 +136,7 @@ class PicoCalcWeatherTests(unittest.TestCase):
                 pass
 
         current = {
-            "name": "PicoTown",
+            "name": "Southworth",
             "main": {"temp": 66, "feels_like": 65, "humidity": 57, "pressure": 1017},
             "wind": {"speed": 2.4, "deg": 91},
             "weather": [{"icon": "01d", "description": "clear sky"}],
@@ -156,7 +156,7 @@ class PicoCalcWeatherTests(unittest.TestCase):
         self.assertGreaterEqual(by_value["10:24"]["x"], 205)
         self.assertGreaterEqual(by_value["Tue Jun 16"]["x"], 205)
 
-    def test_dashboard_clock_uses_pacific_time(self):
+    def test_dashboard_clock_uses_system_local_time(self):
         module = self.load_module()
 
         class FakeDisplay:
@@ -185,7 +185,7 @@ class PicoCalcWeatherTests(unittest.TestCase):
                 pass
 
         current = {
-            "name": "PicoTown",
+            "name": "Southworth",
             "main": {"temp": 66, "feels_like": 65, "humidity": 57, "pressure": 1017},
             "wind": {"speed": 2.4, "deg": 91},
             "weather": [{"icon": "01d", "description": "clear sky"}],
@@ -200,7 +200,7 @@ class PicoCalcWeatherTests(unittest.TestCase):
         finally:
             module.draw_icon = original_draw_icon
 
-        self.assertIn("10:34", display.ttf_calls)
+        self.assertIn(utc_now.astimezone().strftime("%H:%M"), display.ttf_calls)
 
     def test_loop_refreshes_weather_every_5min_and_clock_every_30sec(self):
         module = self.load_module()
@@ -228,7 +228,7 @@ class PicoCalcWeatherTests(unittest.TestCase):
             fetch_times.append(fake_now["value"])
             return (
                 {
-                    "name": "PicoTown",
+                    "name": "Southworth",
                     "main": {"temp": 66},
                     "wind": {},
                     "weather": [{"icon": "01d", "description": "clear sky"}],
@@ -243,7 +243,6 @@ class PicoCalcWeatherTests(unittest.TestCase):
             module.Settings("key", 0, 0),
             weather_interval=300,
             clock_interval=30,
-            sync_clock=False,
             max_cycles=12,
             display_factory=lambda fb: FakeDisplay(),
             fetcher=fetcher,
@@ -257,18 +256,11 @@ class PicoCalcWeatherTests(unittest.TestCase):
         self.assertEqual(draw_times[:3], [0.0, 30.0, 60.0])
         self.assertEqual(draw_times[10], 300.0)
 
-    def test_startup_ntp_runs_installed_utility(self):
+    def test_weather_app_has_no_embedded_ntp_sync(self):
         module = self.load_module()
-        calls = []
 
-        def runner(command, timeout):
-            calls.append((command, timeout))
-            return 0
-
-        ok = module.sync_time_on_start(command="/usr/local/sbin/picocalc_ntp.py", runner=runner)
-
-        self.assertTrue(ok)
-        self.assertEqual(calls, [(["/usr/local/sbin/picocalc_ntp.py"], 20)])
+        self.assertFalse(hasattr(module, "sync_time_on_start"))
+        self.assertFalse(hasattr(module, "NTP_SCRIPT"))
 
     def test_finds_synced_launcher_icon_directory(self):
         module = self.load_module()
@@ -302,6 +294,62 @@ class PicoCalcWeatherTests(unittest.TestCase):
             module.draw_icon(display, "01d", 0, 0, icon_dir=None, suffix="_big")
 
         self.assertEqual(display.fallback_draws, [])
+
+    def test_ctrl_f5_stops_weather_loop(self):
+        module = self.load_module()
+        from picoterm.keys import Key, KeyPress
+
+        fake_now = {"value": 0.0}
+        draws = []
+
+        class FakeDisplay:
+            width = 320
+            height = 320
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        class FakeKeyboard:
+            def __init__(self):
+                self.calls = 0
+
+            def read_key(self, timeout=0):
+                self.calls += 1
+                if self.calls == 1:
+                    return KeyPress(Key.F5, ctrl=True)
+                return None
+
+        def fetcher(settings):
+            return (
+                {
+                    "name": "Southworth",
+                    "main": {"temp": 66},
+                    "wind": {},
+                    "weather": [{"icon": "01d", "description": "clear sky"}],
+                },
+                {"list": []},
+            )
+
+        def drawer(display, current, forecast, settings, **kwargs):
+            draws.append(fake_now["value"])
+
+        module.run_loop(
+            module.Settings("key", 0, 0),
+            weather_interval=300,
+            clock_interval=30,
+            display_factory=lambda fb: FakeDisplay(),
+            fetcher=fetcher,
+            drawer=drawer,
+            battery_reader=lambda: None,
+            monotonic=lambda: fake_now["value"],
+            sleeper=lambda seconds: fake_now.__setitem__("value", fake_now["value"] + seconds),
+            keyboard=FakeKeyboard(),
+        )
+
+        self.assertEqual(draws, [0.0])
 
 
 if __name__ == "__main__":

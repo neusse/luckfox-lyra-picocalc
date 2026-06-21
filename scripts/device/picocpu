@@ -1,0 +1,196 @@
+#!/usr/bin/env python3
+"""Control PicoCalc/Luckfox CPU frequency through Linux cpufreq sysfs."""
+
+from __future__ import annotations
+
+import os
+import pathlib
+import sys
+
+
+DEFAULT_SYSFS_ROOT = pathlib.Path("/sys")
+POLICY_REL = pathlib.Path("devices/system/cpu/cpufreq/policy0")
+
+
+def usage() -> str:
+    return """Usage:
+  picocpu status
+  picocpu performance
+  picocpu ondemand
+  picocpu set MHz
+
+Examples:
+  picocpu set 800
+  picocpu set 1512
+"""
+
+
+def policy_dir(sysfs_root: pathlib.Path) -> pathlib.Path:
+    return sysfs_root / POLICY_REL
+
+
+def read_value(policy: pathlib.Path, name: str, default: str = "") -> str:
+    path = policy / name
+    try:
+        return path.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        return default
+
+
+def write_value(policy: pathlib.Path, name: str, value: str) -> None:
+    (policy / name).write_text(f"{value}\n", encoding="utf-8")
+
+
+def khz_to_mhz(khz: str) -> str:
+    try:
+        value = int(khz)
+    except ValueError:
+        return khz
+    if value % 1000 == 0:
+        return str(value // 1000)
+    return f"{value / 1000:.3f}".rstrip("0").rstrip(".")
+
+
+def parse_frequency_arg(value: str) -> str:
+    text = value.strip().lower()
+    if text.endswith("mhz"):
+        text = text[:-3]
+    elif text.endswith("m"):
+        text = text[:-1]
+    elif text.endswith("khz"):
+        text = text[:-3]
+        if not text.isdigit():
+            raise ValueError(f"invalid frequency: {value}")
+        return text
+    if not text.isdigit():
+        raise ValueError(f"invalid frequency: {value}")
+    number = int(text)
+    if number < 10000:
+        return str(number * 1000)
+    return str(number)
+
+
+def available_frequencies(policy: pathlib.Path) -> list[str]:
+    text = read_value(policy, "scaling_available_frequencies")
+    return [item for item in text.split() if item]
+
+
+def available_governors(policy: pathlib.Path) -> list[str]:
+    text = read_value(policy, "scaling_available_governors")
+    return [item for item in text.split() if item]
+
+
+def status(policy: pathlib.Path) -> int:
+    if not policy.exists():
+        print(f"cpufreq policy not found: {policy}", file=sys.stderr)
+        return 1
+
+    governor = read_value(policy, "scaling_governor", "unknown")
+    current = read_value(policy, "scaling_cur_freq") or read_value(policy, "cpuinfo_cur_freq", "unknown")
+    min_freq = read_value(policy, "scaling_min_freq") or read_value(policy, "cpuinfo_min_freq", "unknown")
+    max_freq = read_value(policy, "scaling_max_freq") or read_value(policy, "cpuinfo_max_freq", "unknown")
+    freqs = available_frequencies(policy)
+    governors = available_governors(policy)
+
+    print(f"governor: {governor}")
+    print(f"current: {khz_to_mhz(current)} MHz")
+    print(f"range: {khz_to_mhz(min_freq)}-{khz_to_mhz(max_freq)} MHz")
+    if freqs:
+        print("available: " + " ".join(khz_to_mhz(freq) for freq in freqs) + " MHz")
+    if governors:
+        print("governors: " + " ".join(governors))
+    return 0
+
+
+def require_root_or_fake(require_root: bool, sysfs_root: pathlib.Path) -> int:
+    if not require_root:
+        return 0
+    if sysfs_root != DEFAULT_SYSFS_ROOT:
+        return 0
+    geteuid = getattr(os, "geteuid", None)
+    if geteuid is not None and geteuid() != 0:
+        print("picocpu: changing CPU frequency must run as root", file=sys.stderr)
+        return 1
+    return 0
+
+
+def set_governor(policy: pathlib.Path, governor: str) -> int:
+    governors = available_governors(policy)
+    if governors and governor not in governors:
+        print(f"picocpu: governor not available: {governor}", file=sys.stderr)
+        return 2
+    write_value(policy, "scaling_governor", governor)
+    print(f"governor: {governor}")
+    return 0
+
+
+def set_frequency(policy: pathlib.Path, requested: str) -> int:
+    try:
+        khz = parse_frequency_arg(requested)
+    except ValueError as exc:
+        print(f"picocpu: {exc}", file=sys.stderr)
+        return 2
+
+    freqs = available_frequencies(policy)
+    if freqs and khz not in freqs:
+        pretty = " ".join(khz_to_mhz(freq) for freq in freqs)
+        print(
+            f"picocpu: {khz_to_mhz(khz)} MHz is not an available frequency; available: {pretty} MHz",
+            file=sys.stderr,
+        )
+        return 2
+
+    governors = available_governors(policy)
+    if governors and "userspace" not in governors:
+        print("picocpu: userspace governor is not available", file=sys.stderr)
+        return 2
+
+    write_value(policy, "scaling_governor", "userspace")
+    write_value(policy, "scaling_setspeed", khz)
+    print(f"fixed frequency: {khz_to_mhz(khz)} MHz")
+    return 0
+
+
+def main(
+    argv: list[str] | None = None,
+    *,
+    sysfs_root: pathlib.Path = DEFAULT_SYSFS_ROOT,
+    require_root: bool = True,
+) -> int:
+    args = list(sys.argv[1:] if argv is None else argv)
+    policy = policy_dir(pathlib.Path(sysfs_root))
+
+    if not args or args[0] in {"-h", "--help", "help"}:
+        print(usage(), end="")
+        return 0 if args else 2
+
+    command = args[0]
+    if command == "status":
+        if len(args) != 1:
+            print(usage(), end="", file=sys.stderr)
+            return 2
+        return status(policy)
+
+    root_error = require_root_or_fake(require_root, pathlib.Path(sysfs_root))
+    if root_error:
+        return root_error
+
+    if command in {"performance", "ondemand"}:
+        if len(args) != 1:
+            print(usage(), end="", file=sys.stderr)
+            return 2
+        return set_governor(policy, command)
+
+    if command == "set":
+        if len(args) != 2:
+            print(usage(), end="", file=sys.stderr)
+            return 2
+        return set_frequency(policy, args[1])
+
+    print(f"picocpu: unknown command: {command}", file=sys.stderr)
+    print(usage(), end="", file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

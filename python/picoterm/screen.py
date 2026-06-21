@@ -81,15 +81,11 @@ class RawTerminal:
         raw = self.stdin.read(1)
         if raw == b"\x1b":
             fd = self.stdin.fileno()
-            ready, _, _ = select.select([fd], [], [], self.escape_timeout)
-            if ready:
+            while len(raw) < 12:
+                ready, _, _ = select.select([fd], [], [], self.escape_timeout)
+                if not ready:
+                    break
                 raw += self.stdin.read(1)
-                if raw == b"\x1b[":
-                    ready, _, _ = select.select([fd], [], [], self.escape_timeout)
-                    if ready:
-                        raw += self.stdin.read(1)
-                        if raw[-1:] == b"3":
-                            ready, _, _ = select.select([fd], [], [], self.escape_timeout)
-                            if ready:
-                                raw += self.stdin.read(1)
+                if len(raw) > 2 and 0x40 <= raw[-1] <= 0x7E:
+                    break
         return parse_key(raw)

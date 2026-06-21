@@ -1,0 +1,186 @@
+#!/bin/sh
+set -eu
+
+FONT_DIR="${PICOFONT_DIR:-/usr/share/consolefonts}"
+TTY="${PICOFONT_TTY:-/dev/tty1}"
+FIFO="${PICOFONT_FIFO:-/run/picofont/request}"
+
+find_tool() {
+	name="$1"
+
+	if command -v "$name" >/dev/null 2>&1; then
+		command -v "$name"
+		return
+	fi
+
+	for dir in /usr/sbin /sbin /usr/bin /bin; do
+		if [ -x "$dir/$name" ]; then
+			printf '%s\n' "$dir/$name"
+			return
+		fi
+	done
+}
+
+usage() {
+	cat <<'USAGE'
+Usage: picofont [original|small|40|60|12|14|16|18|20|list|FONT]
+
+Switch the PicoCalc Linux console font.
+
+Common choices:
+  picofont original  Load the kernel 6x8 font, 53x40
+  picofont tiny      Same as original
+  picofont 60        Load the experimental kernel 5x8 font, 60x39
+  picofont small     Load Terminus VGA 12 normal, 53x26
+  picofont 40     Load Terminus VGA 16 bold, 40x20 on the 320x320 screen
+  picofont 12     Same as small
+  picofont 14     Load Terminus VGA 14 bold, 40x22
+  picofont 16     Load Terminus VGA 16 bold, 40x20
+  picofont 18     Load Terminus VGA 18 bold, 40x17
+  picofont 20     Load Terminus VGA 20 bold, 40x16
+  picofont list   Show installed Terminus VGA console fonts
+USAGE
+}
+
+font_for_choice() {
+	case "$1" in
+		original|tiny|6x8) printf '%s\n' "$FONT_DIR/kernel-6x8.psf" ;;
+		60|5x8) printf '%s\n' "$FONT_DIR/kernel-5x8.psf" ;;
+		small|12) printf '%s\n' "$FONT_DIR/ter-v12n.psf.gz" ;;
+		40|16) printf '%s\n' "$FONT_DIR/ter-v16b.psf.gz" ;;
+		14) printf '%s\n' "$FONT_DIR/ter-v14b.psf.gz" ;;
+		18) printf '%s\n' "$FONT_DIR/ter-v18b.psf.gz" ;;
+		20) printf '%s\n' "$FONT_DIR/ter-v20b.psf.gz" ;;
+		*) printf '%s\n' "$1" ;;
+	esac
+}
+
+valid_user_choice() {
+	case "$1" in
+		original|tiny|6x8|60|5x8|small|12|40|14|16|18|20|list) return 0 ;;
+		*) return 1 ;;
+	esac
+}
+
+height_for_font() {
+	base=$(basename "$1")
+	base=${base%.gz}
+	base=${base%.psf}
+	base=${base%.psfu}
+	base=${base%b}
+	base=${base%n}
+	printf '%s\n' "$base" | sed -n 's/.*[^0-9]\([0-9][0-9]*\)$/\1/p'
+}
+
+terminal_size_for_font() {
+	base=$(basename "$1")
+
+	case "$base" in
+		kernel-6x8.psf) echo "40 53"; return ;;
+		kernel-5x8.psf) echo "39 60"; return ;;
+		ter-v12*.psf*) echo "26 53"; return ;;
+		ter-v14*.psf*) echo "22 40"; return ;;
+		ter-v16*.psf*) echo "20 40"; return ;;
+		ter-v18*.psf*) echo "17 40"; return ;;
+		ter-v20*.psf*) echo "16 40"; return ;;
+	esac
+
+	height=$(height_for_font "$1")
+
+	if [ -z "$height" ]; then
+		return
+	fi
+
+	echo "$((320 / height)) 40"
+}
+
+load_font() {
+	font="$1"
+
+	if [ ! -f "$font" ]; then
+		echo "Font not found: $font" >&2
+		exit 1
+	fi
+
+	setfont_tool=$(find_tool setfont || true)
+	loadfont_tool=$(find_tool loadfont || true)
+
+	if [ -n "$setfont_tool" ]; then
+		"$setfont_tool" "$font"
+	elif [ -n "$loadfont_tool" ]; then
+		case "$font" in
+			*.gz) zcat "$font" | "$loadfont_tool" ;;
+			*) "$loadfont_tool" < "$font" ;;
+		esac
+	else
+		echo "Neither setfont nor loadfont is installed." >&2
+		exit 1
+	fi
+}
+
+apply_tty_size() {
+	size=$(terminal_size_for_font "$1")
+
+	if [ -z "$size" ]; then
+		return
+	fi
+
+	rows=${size% *}
+	cols=${size#* }
+
+	if [ -e "$TTY" ]; then
+		stty -F "$TTY" rows "$rows" cols "$cols" 2>/dev/null || true
+	else
+		stty rows "$rows" cols "$cols" 2>/dev/null || true
+	fi
+
+	echo "Loaded $(basename "$1") -> ${cols}x${rows}"
+}
+
+choice="${1:-small}"
+
+if [ "$choice" = "--apply-root" ]; then
+	if [ "$(id -u)" != "0" ]; then
+		echo "--apply-root must run as root" >&2
+		exit 1
+	fi
+
+	choice="${2:-small}"
+fi
+
+case "$choice" in
+	-h|--help|help)
+		usage
+		exit 0
+		;;
+	list)
+		find "$FONT_DIR" -maxdepth 1 -type f -name 'ter-v*.psf*' | sort
+		exit 0
+		;;
+esac
+
+if [ "$(id -u)" != "0" ]; then
+	if ! valid_user_choice "$choice"; then
+		echo "Non-root users may choose only: original, 60, small, 40, 12, 14, 16, 18, 20, list" >&2
+		exit 1
+	fi
+
+	if [ "$choice" = "list" ]; then
+		find "$FONT_DIR" -maxdepth 1 -type f -name 'ter-v*.psf*' | sort
+		exit 0
+	fi
+
+	if [ ! -p "$FIFO" ]; then
+		echo "picofontd is not running; root must start it first." >&2
+		exit 1
+	fi
+
+	printf '%s\n' "$choice" > "$FIFO"
+	sleep 1
+	stty -F "$TTY" size 2>/dev/null || true
+	exit 0
+fi
+
+font=$(font_for_choice "$choice")
+load_font "$font"
+apply_tty_size "$font"
